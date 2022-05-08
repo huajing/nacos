@@ -46,7 +46,7 @@ public class NamingExample {
         properties.setProperty("namespace", System.getProperty("namespace"));
         
         NamingService naming = NamingFactory.createNamingService(properties);
-        
+
         naming.registerInstance("nacos.test.3", "11.11.11.11", 8888, "TEST1");
         
         System.out.println("instances after register: " + naming.getAllInstances("nacos.test.3"));
@@ -76,7 +76,7 @@ public class NamingExample {
                 System.out.println("instances from event: " + ((NamingEvent) event).getInstances());
             }
         });
-    
+
         naming.deregisterInstance("nacos.test.3", "11.11.11.11", 8888, "TEST1");
         
         Thread.sleep(1000);

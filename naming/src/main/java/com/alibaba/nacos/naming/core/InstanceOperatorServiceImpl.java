@@ -278,13 +278,16 @@ public class InstanceOperatorServiceImpl implements InstanceOperator {
             throw new Exception("service is disabled now.");
         }
     }
-    
+
+    //处心跳的请求
     @Override
     public int handleBeat(String namespaceId, String serviceName, String ip, int port, String cluster,
             RsInfo clientBeat, BeatInfoInstanceBuilder builder) throws NacosException {
+        //找到本地的实例
         com.alibaba.nacos.naming.core.Instance instance = serviceManager
                 .getInstance(namespaceId, serviceName, cluster, ip, port);
-        
+
+        //本地不存在实例
         if (instance == null) {
             if (clientBeat == null) {
                 return NamingResponseCode.RESOURCE_NOT_FOUND;
@@ -292,12 +295,14 @@ public class InstanceOperatorServiceImpl implements InstanceOperator {
             
             Loggers.SRV_LOG.warn("[CLIENT-BEAT] The instance has been removed for health mechanism, "
                     + "perform data compensation operations, beat: {}, serviceName: {}", clientBeat, serviceName);
+            //解析实例
             instance = parseInstance(builder.setBeatInfo(clientBeat).setServiceName(serviceName).build());
+            //注册实例
             serviceManager.registerInstance(namespaceId, serviceName, instance);
         }
         
         Service service = serviceManager.getService(namespaceId, serviceName);
-        
+        //检查
         serviceManager.checkServiceIsNull(service, namespaceId, serviceName);
         
         if (clientBeat == null) {
@@ -306,7 +311,9 @@ public class InstanceOperatorServiceImpl implements InstanceOperator {
             clientBeat.setPort(port);
             clientBeat.setCluster(cluster);
         }
+        //主要逻辑，处理客户端心跳
         service.processClientBeat(clientBeat);
+
         return NamingResponseCode.OK;
     }
     

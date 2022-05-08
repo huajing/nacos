@@ -357,7 +357,7 @@ public class InstanceController {
     
     /**
      * Create a beat for instance.
-     *
+     * 接收心跳
      * @param request http request
      * @return detail information of instance
      * @throws Exception any error during handle
@@ -366,17 +366,16 @@ public class InstanceController {
     @PutMapping("/beat")
     @Secured(action = ActionTypes.WRITE)
     public ObjectNode beat(HttpServletRequest request) throws Exception {
-        
+        //构造空返回对象
         ObjectNode result = JacksonUtils.createEmptyJsonNode();
         result.put(SwitchEntry.CLIENT_BEAT_INTERVAL, switchDomain.getClientBeatInterval());
-        
+        //从请求获取beat数据
         String beat = WebUtils.optional(request, "beat", StringUtils.EMPTY);
         RsInfo clientBeat = null;
         if (StringUtils.isNotBlank(beat)) {
             clientBeat = JacksonUtils.toObj(beat, RsInfo.class);
         }
-        String clusterName = WebUtils
-                .optional(request, CommonParams.CLUSTER_NAME, UtilsAndCommons.DEFAULT_CLUSTER_NAME);
+        String clusterName = WebUtils.optional(request, CommonParams.CLUSTER_NAME, UtilsAndCommons.DEFAULT_CLUSTER_NAME);
         String ip = WebUtils.optional(request, "ip", StringUtils.EMPTY);
         int port = Integer.parseInt(WebUtils.optional(request, "port", "0"));
         if (clientBeat != null) {
@@ -389,18 +388,21 @@ public class InstanceController {
             ip = clientBeat.getIp();
             port = clientBeat.getPort();
         }
+        //namespace
         String namespaceId = WebUtils.optional(request, CommonParams.NAMESPACE_ID, Constants.DEFAULT_NAMESPACE_ID);
+        //服务名
         String serviceName = WebUtils.required(request, CommonParams.SERVICE_NAME);
         NamingUtils.checkServiceNameFormat(serviceName);
         Loggers.SRV_LOG.debug("[CLIENT-BEAT] full arguments: beat: {}, serviceName: {}, namespaceId: {}", clientBeat,
                 serviceName, namespaceId);
         BeatInfoInstanceBuilder builder = BeatInfoInstanceBuilder.newBuilder();
         builder.setRequest(request);
-        int resultCode = getInstanceOperator()
-                .handleBeat(namespaceId, serviceName, ip, port, clusterName, clientBeat, builder);
+
+        //这里应该是主要逻辑
+        int resultCode = getInstanceOperator().handleBeat(namespaceId, serviceName, ip, port, clusterName, clientBeat, builder);
+
         result.put(CommonParams.CODE, resultCode);
-        result.put(SwitchEntry.CLIENT_BEAT_INTERVAL,
-                getInstanceOperator().getHeartBeatInterval(namespaceId, serviceName, ip, port, clusterName));
+        result.put(SwitchEntry.CLIENT_BEAT_INTERVAL, getInstanceOperator().getHeartBeatInterval(namespaceId, serviceName, ip, port, clusterName));
         result.put(SwitchEntry.LIGHT_BEAT_ENABLED, switchDomain.isLightBeatEnabled());
         return result;
     }
@@ -440,6 +442,7 @@ public class InstanceController {
     }
     
     private InstanceOperator getInstanceOperator() {
+        //使用Grpc特性？选择不同的操作实例
         return upgradeJudgement.isUseGrpcFeatures() ? instanceServiceV2 : instanceServiceV1;
     }
 }

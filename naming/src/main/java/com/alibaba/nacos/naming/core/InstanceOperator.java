@@ -29,7 +29,9 @@ import java.util.Map;
 
 /**
  * Instance operator.
- *
+ * 实例操作器
+ * v1、InstanceOperatorServiceImpl 使用http
+ * v2、InstanceOperatorClientImpl 使用grpc
  * @author xiweng.yy
  */
 public interface InstanceOperator {

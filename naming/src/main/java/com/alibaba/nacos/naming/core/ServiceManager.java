@@ -480,13 +480,14 @@ public class ServiceManager implements RecordListener<Service> {
      * @throws Exception any error occurred in the process
      */
     public void registerInstance(String namespaceId, String serviceName, Instance instance) throws NacosException {
-        
+        //创建一个空实例
         createEmptyService(namespaceId, serviceName, instance.isEphemeral());
-        
+        //获取一个实例
         Service service = getService(namespaceId, serviceName);
         
         checkServiceIsNull(service, namespaceId, serviceName);
-        
+
+        //添加实例，整个功能好像只添加到了本地，并没有往其实集群结点同步数据
         addInstance(namespaceId, serviceName, instance.isEphemeral(), instance);
     }
     
@@ -624,7 +625,7 @@ public class ServiceManager implements RecordListener<Service> {
      *
      * @param namespaceId namespace
      * @param serviceName service name
-     * @param ephemeral   whether instance is ephemeral
+     * @param ephemeral   whether instance is ephemeral 是否是临时实例
      * @param ips         instances
      * @throws NacosException nacos exception
      */
@@ -640,7 +641,8 @@ public class ServiceManager implements RecordListener<Service> {
             
             Instances instances = new Instances();
             instances.setInstanceList(instanceList);
-            
+
+            //一致性service，加入实例
             consistencyService.put(key, instances);
         }
     }

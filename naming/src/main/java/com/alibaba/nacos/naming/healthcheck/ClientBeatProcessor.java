@@ -30,7 +30,7 @@ import java.util.List;
 
 /**
  * Thread to update ephemeral instance triggered by client beat for v1.x.
- *
+ * 线程任务处理心跳
  * @author nkorange
  */
 public class ClientBeatProcessor implements BeatProcessor {
@@ -72,19 +72,26 @@ public class ClientBeatProcessor implements BeatProcessor {
         int port = rsInfo.getPort();
         Cluster cluster = service.getClusterMap().get(clusterName);
         List<Instance> instances = cluster.allIPs(true);
-        
+
+        //遍历所有实例
         for (Instance instance : instances) {
+
+            //找到当刷新心跳的实例
             if (instance.getIp().equals(ip) && instance.getPort() == port) {
                 if (Loggers.EVT_LOG.isDebugEnabled()) {
                     Loggers.EVT_LOG.debug("[CLIENT-BEAT] refresh beat: {}", rsInfo.toString());
                 }
+                //设置当前时间戳
                 instance.setLastBeat(System.currentTimeMillis());
                 if (!instance.isMarked() && !instance.isHealthy()) {
+                    //实例重新设置为健康状态
                     instance.setHealthy(true);
                     Loggers.EVT_LOG
                             .info("service: {} {POS} {IP-ENABLED} valid: {}:{}@{}, region: {}, msg: client beat ok",
                                     cluster.getService().getName(), ip, port, cluster.getName(),
                                     UtilsAndCommons.LOCALHOST_SITE);
+
+                    //核心逻辑：UdpPushService，使用ApplicationContext发布事件通知
                     getPushService().serviceChanged(service);
                 }
             }
