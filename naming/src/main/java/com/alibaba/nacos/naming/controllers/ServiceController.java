@@ -69,6 +69,8 @@ import java.util.Optional;
  * Service operation controller.
  *
  * @author nkorange
+ *
+ * /v1/ns/instance
  */
 @RestController
 @RequestMapping(UtilsAndCommons.NACOS_NAMING_CONTEXT + UtilsAndCommons.NACOS_NAMING_SERVICE_CONTEXT)
@@ -156,7 +158,7 @@ public class ServiceController {
     
     /**
      * List all service names.
-     *
+     * /v1/ns/instance/list
      * @param request http request
      * @return all service names
      * @throws Exception exception
@@ -169,8 +171,15 @@ public class ServiceController {
         String namespaceId = WebUtils.optional(request, CommonParams.NAMESPACE_ID, Constants.DEFAULT_NAMESPACE_ID);
         String groupName = WebUtils.optional(request, CommonParams.GROUP_NAME, Constants.DEFAULT_GROUP);
         String selectorString = WebUtils.optional(request, "selector", StringUtils.EMPTY);
+
+        //返回数据
         ObjectNode result = JacksonUtils.createEmptyJsonNode();
-        Collection<String> serviceNameList = getServiceOperator().listService(namespaceId, groupName, selectorString);
+
+        //核心代码：
+        Collection<String> serviceNameList = getServiceOperator()//v1和v2的实现不同
+                .listService(namespaceId, groupName, selectorString);
+
+        //返回数据设置
         result.put("count", serviceNameList.size());
         result.replace("doms",
                 JacksonUtils.transferToJsonNode(ServiceUtil.pageServiceName(pageNo, pageSize, serviceNameList)));

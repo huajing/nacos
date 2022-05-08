@@ -123,11 +123,14 @@ public class ServiceOperatorV1Impl implements ServiceOperator {
     
     @Override
     public Collection<String> listService(String namespaceId, String groupName, String selector) throws NacosException {
+        //按命名空间查询服务
         Map<String, com.alibaba.nacos.naming.core.Service> serviceMap = serviceManager.chooseServiceMap(namespaceId);
         if (serviceMap == null || serviceMap.isEmpty()) {
             return Collections.emptyList();
         }
+        //选择过滤1
         serviceMap = ServiceUtil.selectServiceWithGroupName(serviceMap, groupName);
+        //选择过滤2
         serviceMap = ServiceUtil.selectServiceBySelector(serviceMap, selector);
         if (!Constants.ALL_PATTERN.equals(groupName)) {
             serviceMap.entrySet()

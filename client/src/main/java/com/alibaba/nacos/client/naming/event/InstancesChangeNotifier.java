@@ -38,7 +38,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * @since 1.4.1
  */
 public class InstancesChangeNotifier extends Subscriber<InstancesChangeEvent> {
-    
+
+    //事件监听
     private final Map<String, ConcurrentHashSet<EventListener>> listenerMap = new ConcurrentHashMap<String, ConcurrentHashSet<EventListener>>();
     
     private final Object lock = new Object();
@@ -54,6 +55,8 @@ public class InstancesChangeNotifier extends Subscriber<InstancesChangeEvent> {
     public void registerListener(String groupName, String serviceName, String clusters, EventListener listener) {
         String key = ServiceInfo.getKey(NamingUtils.getGroupedName(serviceName, groupName), clusters);
         ConcurrentHashSet<EventListener> eventListeners = listenerMap.get(key);
+
+        //DCL
         if (eventListeners == null) {
             synchronized (lock) {
                 eventListeners = listenerMap.get(key);
@@ -63,6 +66,7 @@ public class InstancesChangeNotifier extends Subscriber<InstancesChangeEvent> {
                 }
             }
         }
+        //加入事件坚挺
         eventListeners.add(listener);
     }
     

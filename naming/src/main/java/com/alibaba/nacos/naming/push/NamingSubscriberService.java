@@ -23,7 +23,12 @@ import java.util.Collection;
 
 /**
  * Naming subscriber service.
- *
+ * Naming的订阅服务的抽象 <br>
+ * v1，NamingSubscriberServiceV1Impl
+ * v2，NamingSubscriberServiceV2Impl
+ * 另外
+ * NamingSubscriberServiceLocalImpl
+ * NamingSubscriberServiceAggregationImpl
  * @author xiweng.yy
  */
 public interface NamingSubscriberService {

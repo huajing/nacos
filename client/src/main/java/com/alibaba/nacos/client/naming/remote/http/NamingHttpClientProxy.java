@@ -213,6 +213,7 @@ public class NamingHttpClientProxy extends AbstractNamingClientProxy {
         params.put(UDP_PORT_PARAM, String.valueOf(udpPort));
         params.put(CLIENT_IP_PARAM, NetUtils.localIP());
         params.put(HEALTHY_ONLY_PARAM, String.valueOf(healthyOnly));
+        //->/v1/ns/instance/list
         String result = reqApi(UtilAndComs.nacosUrlBase + "/instance/list", params, HttpMethod.GET);
         if (StringUtils.isNotEmpty(result)) {
             return JacksonUtils.toObj(result, ServiceInfo.class);
@@ -409,9 +410,11 @@ public class NamingHttpClientProxy extends AbstractNamingClientProxy {
         }
         
         NacosException exception = new NacosException();
-        
+
+        //nacosDomain,所以要宣称支持域名，比如nginx做负载
         if (serverListManager.isDomain()) {
             String nacosDomain = serverListManager.getNacosDomain();
+            //maxRetry重试次数
             for (int i = 0; i < maxRetry; i++) {
                 try {
                     return callServer(api, params, body, nacosDomain, method);

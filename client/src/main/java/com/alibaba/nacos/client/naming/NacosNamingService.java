@@ -388,8 +388,12 @@ public class NacosNamingService implements NamingService {
         if (null == listener) {
             return;
         }
+        //集群
         String clusterString = StringUtils.join(clusters, ",");
+        //加入本地坚挺
         changeNotifier.registerListener(groupName, serviceName, clusterString, listener);
+
+        //订阅服务
         clientProxy.subscribe(serviceName, groupName, clusterString);
     }
     

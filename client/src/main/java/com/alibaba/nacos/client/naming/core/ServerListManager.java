@@ -52,7 +52,7 @@ import static com.alibaba.nacos.client.utils.LogUtils.NAMING_LOGGER;
 
 /**
  * Server list manager.
- *
+ * 服务端列表管理器
  * @author xiweng.yy
  */
 public class ServerListManager implements ServerListFactory, Closeable {
@@ -64,7 +64,8 @@ public class ServerListManager implements ServerListFactory, Closeable {
     private final String namespace;
     
     private final AtomicInteger currentIndex = new AtomicInteger();
-    
+
+    //服务端的列表
     private final List<String> serverList = new ArrayList<>();
     
     private List<String> serversFromEndpoint = new ArrayList<>();

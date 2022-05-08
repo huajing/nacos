@@ -64,7 +64,10 @@ import java.util.zip.GZIPOutputStream;
 
 /**
  * Push service.
- *
+ * 核心逻辑：
+ * 1、onApplicationEvent 接收到事件
+ * 2、向所有的客户端推送udp消息
+ * 3、接收客户端的应答---Daemon线程在做
  * @author nacos
  */
 @Component
@@ -88,13 +91,14 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
     private final UdpConnector udpConnector;
     
     private static ConcurrentMap<String, Future> futureMap = new ConcurrentHashMap<>();
-    
+    //udp和接收线程初始化
     static {
         try {
+            //构建udpSocket
             udpSocket = new DatagramSocket();
-            
+
+            //Receiver为Runnable
             Receiver receiver = new Receiver();
-            
             Thread inThread = new Thread(receiver);
             inThread.setDaemon(true);
             inThread.setName("com.alibaba.nacos.naming.push.receiver");
@@ -108,16 +112,19 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
     public UdpPushService(UdpConnector udpConnector) {
         this.udpConnector = udpConnector;
     }
-    
+
+    //spring扩展，接收applicationContext
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
         this.applicationContext = applicationContext;
     }
-    
+
+    //收到spring的事件通知
     @Override
     public void onApplicationEvent(ServiceChangeEvent event) {
         // If upgrade to 2.0.X, do not push for v1.
         if (ApplicationUtils.getBean(UpgradeJudgement.class).isUseGrpcFeatures()) {
+            //使用UseGrpcFeatures，直接返回，不作处理
             return;
         }
         Service service = event.getService();
@@ -130,6 +137,8 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
         Future future = GlobalExecutor.scheduleUdpSender(() -> {
             try {
                 Loggers.PUSH.info(serviceName + " is changed, add it to push queue.");
+
+                //获取订阅的客户端
                 ConcurrentMap<String, PushClient> clients = subscriberServiceV1.getClientMap()
                         .get(UtilsAndCommons.assembleFullServiceName(namespaceId, serviceName));
                 if (MapUtils.isEmpty(clients)) {
@@ -138,9 +147,12 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
                 
                 Map<String, Object> cache = new HashMap<>(16);
                 long lastRefTime = System.nanoTime();
+                //遍历所有的client
                 for (PushClient client : clients.values()) {
+                    //僵尸客户端，移除
                     if (client.zombie()) {
                         Loggers.PUSH.debug("client is zombie: " + client);
+                        //client.toString() 作为Map的key,PushClient覆盖了toString()方法
                         clients.remove(client.toString());
                         Loggers.PUSH.debug("client is zombie: " + client);
                         continue;
@@ -172,7 +184,8 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
                     Loggers.PUSH.info("serviceName: {} changed, schedule push for: {}, agent: {}, key: {}",
                             client.getServiceName(), client.getAddrStr(), client.getAgent(),
                             (ackEntry == null ? null : ackEntry.getKey()));
-                    
+
+                    //核心逻辑，给一个client推送udp数据，上面一大段方法都在豆构造ackEntry对象
                     udpPush(ackEntry);
                 }
             } catch (Exception e) {
@@ -190,7 +203,7 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
     
     /**
      * Push Data without callback.
-     *
+     * 推送数据，不回调
      * @param subscriber  subscriber
      * @param serviceInfo service info
      */
@@ -209,7 +222,7 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
     
     /**
      * Push Data with callback.
-     *
+     * 推送数据，要回调，回调到PushCallBack
      * @param subscriber   subscriber
      * @param serviceInfo  service info
      * @param pushCallBack callback
@@ -226,17 +239,18 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
             Loggers.PUSH.error("[NACOS-PUSH] failed to push serviceName: {} to client, error: {}", serviceName, e);
         }
     }
-    
+
+    //构造ack数据
     private AckEntry prepareAckEntry(Subscriber subscriber, ServiceInfo serviceInfo) {
         InetSocketAddress socketAddress = new InetSocketAddress(subscriber.getIp(), subscriber.getPort());
         long lastRefTime = System.nanoTime();
         return prepareAckEntry(socketAddress, prepareHostsData(JacksonUtils.toJson(serviceInfo)), lastRefTime);
     }
-    
+    //构造ack数据
     private static AckEntry prepareAckEntry(PushClient client, Map<String, Object> data, long lastRefTime) {
         return prepareAckEntry(client.getSocketAddr(), data, lastRefTime);
     }
-    
+    //构造ack数据
     private static AckEntry prepareAckEntry(InetSocketAddress socketAddress, Map<String, Object> data,
             long lastRefTime) {
         if (MapUtils.isEmpty(data)) {
@@ -285,6 +299,8 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
     
     /**
      * Service changed.
+     * 1、本对象UdpPushService implements ApplicationContextAware, ApplicationListener<ServiceChangeEvent>，可以接收事件
+     * 2、@Component，且实现ApplicationContextAware，在spring中自动注入bean
      *
      * @param service service
      */
@@ -294,7 +310,9 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
     
     /**
      * Judge whether this agent is supported to push.
-     *
+     * 判断agent是否可以支持推送
+     *  1、switchDomain是否支持
+     *  2、各种语言是否支持
      * @param agent agent information
      * @return true if agent can be pushed, otherwise false
      */
@@ -333,7 +351,8 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
     public static void resetPushState() {
         ackMap.clear();
     }
-    
+
+    //压缩
     private static byte[] compressIfNecessary(byte[] dataBytes) throws IOException {
         // enable compression when data is larger than 1KB
         int maxDataSizeUncompress = 1024;
@@ -359,19 +378,25 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
         result.put("data", dataContent);
         return result;
     }
-    
+    //向客户端推送数据
     private static AckEntry udpPush(AckEntry ackEntry) {
         if (ackEntry == null) {
             Loggers.PUSH.error("[NACOS-PUSH] ackEntry is null.");
             return null;
         }
-        
+
+        //达到最大的重试次数，默认为1
         if (ackEntry.getRetryTimes() > Constants.UDP_MAX_RETRY_TIMES) {
             Loggers.PUSH.warn("max re-push times reached, retry times {}, key: {}", ackEntry.getRetryTimes(),
                     ackEntry.getKey());
+            //1
             ackMap.remove(ackEntry.getKey());
+            //2
             udpSendTimeMap.remove(ackEntry.getKey());
+            //3
             MetricsMonitor.incrementFailPush();
+
+            //return
             return ackEntry;
         }
         
@@ -384,9 +409,11 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
             
             Loggers.PUSH.info("send udp packet: " + ackEntry.getKey());
             udpSocket.send(ackEntry.getOrigin());
-            
+
+            //增加一次尝试次数
             ackEntry.increaseRetryTime();
-            
+
+            //异步推送Retransmitter实现Runable
             GlobalExecutor.scheduleRetransmitter(new Retransmitter(ackEntry),
                     TimeUnit.NANOSECONDS.toMillis(Constants.ACK_TIMEOUT_NANOS), TimeUnit.MILLISECONDS);
             
@@ -394,6 +421,7 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
         } catch (Exception e) {
             Loggers.PUSH.error("[NACOS-PUSH] failed to push data: {} to client: {}, error: {}", ackEntry.getData(),
                     ackEntry.getOrigin().getAddress().getHostAddress(), e);
+
             ackMap.remove(ackEntry.getKey());
             udpSendTimeMap.remove(ackEntry.getKey());
             MetricsMonitor.incrementFailPush();
@@ -418,16 +446,23 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
             }
         }
     }
-    
+
+    /**
+     * 启动时即设置为了daemon线程
+     * service变化时给所有的client发送数据，Receiver为接收回应
+     * 核心：ackMap.remove(ackKey);
+     */
     public static class Receiver implements Runnable {
         
         @Override
         public void run() {
             while (true) {
                 byte[] buffer = new byte[1024 * 64];
+                //udp数据包
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 
                 try {
+                    //阻塞，等待接收数据
                     udpSocket.receive(packet);
                     
                     String json = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8).trim();
@@ -442,6 +477,8 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
                     }
                     
                     String ackKey = AckEntry.getAckKey(ip, port, ackPacket.lastRefTime);
+
+                    //核心逻辑：移除ack数据，表时客户端做了应答
                     AckEntry ackEntry = ackMap.remove(ackKey);
                     if (ackEntry == null) {
                         throw new IllegalStateException(

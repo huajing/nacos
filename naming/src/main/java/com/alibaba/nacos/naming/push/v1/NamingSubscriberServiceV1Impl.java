@@ -43,12 +43,13 @@ import java.util.concurrent.TimeUnit;
 @org.springframework.stereotype.Service
 @Deprecated
 public class NamingSubscriberServiceV1Impl implements NamingSubscriberService {
-    
+    //订阅cluster的客户端<serviceKey,<PushClient.toString,PushClient>>
     private final ConcurrentMap<String, ConcurrentMap<String, PushClient>> clientMap = new ConcurrentHashMap<>();
     
     public NamingSubscriberServiceV1Impl() {
         GlobalExecutor.scheduleRetransmitter(() -> {
             try {
+                //移除僵尸client
                 removeClientIfZombie();
             } catch (Throwable e) {
                 Loggers.PUSH.warn("[NACOS-PUSH] failed to remove client zombie");
@@ -62,6 +63,7 @@ public class NamingSubscriberServiceV1Impl implements NamingSubscriberService {
             ConcurrentMap<String, PushClient> clientConcurrentMap = entry.getValue();
             for (Map.Entry<String, PushClient> entry1 : clientConcurrentMap.entrySet()) {
                 PushClient client = entry1.getValue();
+                //核心代码,其实只有2行
                 if (client.zombie()) {
                     clientConcurrentMap.remove(entry1.getKey());
                 }
@@ -106,7 +108,7 @@ public class NamingSubscriberServiceV1Impl implements NamingSubscriberService {
             String groupName = NamingUtils.getGroupName(serviceFullName);
             //get serviceName
             String name = NamingUtils.getServiceName(serviceFullName);
-            //fuzzy match
+            //fuzzy match 模糊匹配
             if (outKey.startsWith(namespaceId) && name.indexOf(NamingUtils.getServiceName(serviceName)) >= 0
                     && groupName.indexOf(NamingUtils.getGroupName(serviceName)) >= 0) {
                 clientConcurrentMap.forEach((key, client) -> {
@@ -125,7 +127,7 @@ public class NamingSubscriberServiceV1Impl implements NamingSubscriberService {
     
     /**
      * Add push target client.
-     *
+     * 添加目标推送客户端
      * @param namespaceId namespace id
      * @param serviceName service name
      * @param clusters    cluster
@@ -145,22 +147,24 @@ public class NamingSubscriberServiceV1Impl implements NamingSubscriberService {
     
     /**
      * Add push target client.
-     *
+     * 添加订阅客户端
      * @param client push target client
      */
     public void addClient(PushClient client) {
         // client is stored by key 'serviceName' because notify event is driven by serviceName change
         String serviceKey = UtilsAndCommons.assembleFullServiceName(client.getNamespaceId(), client.getServiceName());
         ConcurrentMap<String, PushClient> clients = clientMap.get(serviceKey);
-        if (clients == null) {
+        if (clients == null) {//
             clientMap.putIfAbsent(serviceKey, new ConcurrentHashMap<>(1024));
             clients = clientMap.get(serviceKey);
         }
         
         PushClient oldClient = clients.get(client.toString());
         if (oldClient != null) {
+            //更新lastRefTime
             oldClient.refresh();
         } else {
+            //不存在则添加
             PushClient res = clients.putIfAbsent(client.toString(), client);
             if (res != null) {
                 Loggers.PUSH.warn("client: {} already associated with key {}", res.getAddrStr(), res);
