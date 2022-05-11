@@ -63,7 +63,8 @@ public class ServerListManager extends MemberChangeListener {
     private final ServerMemberManager memberManager;
     
     private final Synchronizer synchronizer = new ServerStatusSynchronizer();
-    
+
+    //服务列表
     private volatile List<Member> servers;
     
     public ServerListManager(final SwitchDomain switchDomain, final ServerMemberManager memberManager) {
@@ -75,7 +76,9 @@ public class ServerListManager extends MemberChangeListener {
     
     @PostConstruct
     public void init() {
+        //注册server状态报告,延迟2s发
         GlobalExecutor.registerServerStatusReporter(new ServerStatusReporter(), 2000);
+
         GlobalExecutor.registerServerInfoUpdater(new ServerInfoUpdater());
     }
     
@@ -194,7 +197,11 @@ public class ServerListManager extends MemberChangeListener {
             }
         }
     }
-    
+
+    /**
+     * server的状态报告，往外发给别的server
+     * finally后再次启动发送报告，按2秒同步一次的周期执行
+     */
     private class ServerStatusReporter implements Runnable {
         
         @Override
@@ -211,6 +218,7 @@ public class ServerListManager extends MemberChangeListener {
                 }
                 
                 long curTime = System.currentTimeMillis();
+                //ststus是发送给别的server的状态参数，site#ip#liveTime#weight
                 String status = LOCALHOST_SITE + "#" + EnvUtil.getLocalAddress() + "#" + curTime + "#" + weight
                         + "\r\n";
                 
@@ -224,23 +232,20 @@ public class ServerListManager extends MemberChangeListener {
                 
                 if (allServers.size() > 0 && !EnvUtil.getLocalAddress()
                         .contains(InternetAddressUtil.localHostIP())) {
+                    //遍历所有的server结点
                     for (Member server : allServers) {
                         if (Objects.equals(server.getAddress(), EnvUtil.getLocalAddress())) {
                             continue;
                         }
-                        
                         // This metadata information exists from 1.3.0 onwards "version"
                         if (server.getExtendVal(MemberMetaDataConstants.VERSION) != null) {
-                            Loggers.SRV_LOG
-                                    .debug("[SERVER-STATUS] target {} has extend val {} = {}, use new api report status",
-                                            server.getAddress(), MemberMetaDataConstants.VERSION,
-                                            server.getExtendVal(MemberMetaDataConstants.VERSION));
                             continue;
                         }
                         
                         Message msg = new Message();
                         msg.setData(status);
-                        
+
+                        //核心逻辑，ServerStatusSynchronizer.send -> asyncHttpGet -> operator/server/status
                         synchronizer.send(server.getAddress(), msg);
                     }
                 }

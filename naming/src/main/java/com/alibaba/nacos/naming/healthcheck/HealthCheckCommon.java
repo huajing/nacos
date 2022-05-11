@@ -79,7 +79,7 @@ public class HealthCheckCommon {
     
     /**
      * Health check pass.
-     *
+     * 健康检查通过
      * @param ip   instance
      * @param task health check task
      * @param msg  message

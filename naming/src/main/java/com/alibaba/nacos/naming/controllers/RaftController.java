@@ -56,7 +56,7 @@ import java.util.Map;
 
 /**
  * Methods for Raft consistency protocol. These methods should only be invoked by Nacos server itself.
- *
+ * 一致性协议，只有nacos的server自己调用
  * @author nkorange
  * @since 1.0.0
  * @deprecated will remove in 1.4.x
@@ -86,7 +86,7 @@ public class RaftController {
     
     /**
      * Raft vote api.
-     *
+     * 接收投票的api
      * @param request  http request
      * @param response http response
      * @return peer information

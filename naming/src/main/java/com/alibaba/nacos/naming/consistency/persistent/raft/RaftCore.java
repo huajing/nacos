@@ -169,7 +169,8 @@ public class RaftCore implements Closeable {
         initialized = true;
         
         Loggers.RAFT.info("finish to load data from disk, cost: {} ms.", (System.currentTimeMillis() - start));
-        
+
+        //注册master选举
         masterTask = GlobalExecutor.registerMasterElection(new MasterElection());
         heartbeatTask = GlobalExecutor.registerHeartbeat(new HeartBeat());
         
@@ -467,7 +468,7 @@ public class RaftCore implements Closeable {
         Loggers.RAFT.warn("clean old cache datum for old raft");
         datums.clear();
     }
-    
+    //500ms执行一次
     public class MasterElection implements Runnable {
         
         @Override
@@ -481,16 +482,19 @@ public class RaftCore implements Closeable {
                 }
                 
                 RaftPeer local = peers.local();
-                local.leaderDueMs -= GlobalExecutor.TICK_PERIOD_MS;
+                //leaderDueMs一共15s,每次减去500ms
+                local.leaderDueMs -= GlobalExecutor.TICK_PERIOD_MS;//有效期时间，500ms
                 
                 if (local.leaderDueMs > 0) {
                     return;
                 }
-                
+                //leader的时间到了，要重新发起投票？？？
+
                 // reset timeout
                 local.resetLeaderDue();
                 local.resetHeartbeatDue();
-                
+
+                //发送投票
                 sendVote();
             } catch (Exception e) {
                 Loggers.RAFT.warn("[RAFT] error while master election {}", e);
@@ -501,20 +505,24 @@ public class RaftCore implements Closeable {
         private void sendVote() {
             
             RaftPeer local = peers.get(NetUtils.localServer());
-            Loggers.RAFT.info("leader timeout, start voting,leader: {}, term: {}", JacksonUtils.toJson(getLeader()),
-                    local.term);
-            
+            //脑裂了赶紧选择leader吧
+            Loggers.RAFT.info("leader timeout, start voting,leader: {}, term: {}", JacksonUtils.toJson(getLeader()), local.term);
+
+            //leader=null,peers.voteFor=null，但没有重置term
             peers.reset();
             
             local.term.incrementAndGet();
-            local.voteFor = local.ip;
-            local.state = RaftPeer.State.CANDIDATE;
+            local.voteFor = local.ip;//投票给自己？？
+            local.state = RaftPeer.State.CANDIDATE;//候选
             
             Map<String, String> params = new HashMap<>(1);
-            params.put("vote", JacksonUtils.toJson(local));
+            params.put("vote", JacksonUtils.toJson(local));//把自己作为投票对象发送给其它的结点
+            //RaftPeerSet=peers
             for (final String server : peers.allServersWithoutMySelf()) {
+                //构造url,联系虽的naocs server
                 final String url = buildUrl(server, API_VOTE);
                 try {
+                    //异步发送给各个nacos server(见 RaftController->/vote)，Callback接收回调,
                     HttpClient.asyncHttpPost(url, null, params, new Callback<String>() {
                         @Override
                         public void onReceive(RestResult<String> result) {
@@ -522,11 +530,12 @@ public class RaftCore implements Closeable {
                                 Loggers.RAFT.error("NACOS-RAFT vote failed: {}, url: {}", result.getCode(), url);
                                 return;
                             }
-                            
+                            //返回的数据
                             RaftPeer peer = JacksonUtils.toObj(result.getData(), RaftPeer.class);
                             
                             Loggers.RAFT.info("received approve from peer: {}", JacksonUtils.toJson(peer));
-                            
+
+                            //核心方法，决定leader是谁，每次server都会执行一次
                             peers.decideLeader(peer);
                             
                         }
@@ -550,19 +559,22 @@ public class RaftCore implements Closeable {
     
     /**
      * Received vote.
-     *
-     * @param remote remote raft peer of vote information
+     * 接收到投票信息
+     * @param remote remote raft peer of vote information，远程的投票信息
      * @return self-peer information
      */
     public synchronized RaftPeer receivedVote(RaftPeer remote) {
+        //当前结点为停了
         if (stopWork) {
             throw new IllegalStateException("old raft protocol already stop work");
         }
+        //本地中是否存这remote这个结点
         if (!peers.contains(remote)) {
             throw new IllegalStateException("can not find peer: " + remote.ip);
         }
-        
+        //找到自己
         RaftPeer local = peers.get(NetUtils.localServer());
+        //远程的term与自己的比较，对方和自己比大小啊，哈哈~，对方还没自己大
         if (remote.term.get() <= local.term.get()) {
             String msg = "received illegitimate vote" + ", voter-term:" + remote.term + ", votee-term:" + local.term;
             
@@ -570,14 +582,18 @@ public class RaftCore implements Closeable {
             if (StringUtils.isEmpty(local.voteFor)) {
                 local.voteFor = local.ip;
             }
-            
+
+            //推举自己
             return local;
         }
-        
+
+        //对方还比自己term大
+
+        //重新设置leaderDueMs，也就是这个时间到达后才会发起投票
         local.resetLeaderDue();
         
-        local.state = RaftPeer.State.FOLLOWER;
-        local.voteFor = remote.ip;
+        local.state = RaftPeer.State.FOLLOWER;//做为从结点
+        local.voteFor = remote.ip;//投票给远程ip
         local.term.set(remote.term.get());
         
         Loggers.RAFT.info("vote {} as leader, term: {}", remote.ip, remote.term);

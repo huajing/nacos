@@ -62,6 +62,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
+ * 存储着本节点所知道的所有成员节点列表信息，提供了针对成员节点的 增删改查操作
  * Cluster node management in Nacos.
  *
  * <p>{@link ServerMemberManager#init()} Cluster node manager initialization {@link ServerMemberManager#shutdown()} The
@@ -101,6 +102,7 @@ public class ServerMemberManager implements ApplicationListener<WebServerInitial
     
     /**
      * Cluster node list.
+     * 集群结点列表/成员结点
      */
     private volatile ConcurrentSkipListMap<String, Member> serverList;
     
@@ -155,7 +157,8 @@ public class ServerMemberManager implements ApplicationListener<WebServerInitial
         
         // init abilities.
         this.self.setAbilities(initMemberAbilities());
-        
+
+        //把自己放入集群列表中
         serverList.put(self.getAddress(), self);
         
         // register NodeChangeEvent publisher to NotifyManager
@@ -271,7 +274,7 @@ public class ServerMemberManager implements ApplicationListener<WebServerInitial
     
     /**
      * Whether the node exists within the cluster.
-     *
+     * 是否结点在集群中
      * @param address ip:port
      * @return is exists
      */

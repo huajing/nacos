@@ -25,7 +25,7 @@ import java.util.Objects;
 
 /**
  * Push Client for v1.x.
- *
+ * 推送给客户端
  * @author xiweng.yy
  */
 public class PushClient {

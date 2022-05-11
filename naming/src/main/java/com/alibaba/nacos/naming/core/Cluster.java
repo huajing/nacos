@@ -52,26 +52,29 @@ public class Cluster extends com.alibaba.nacos.api.naming.pojo.Cluster implement
      * a addition for same site routing, can group multiple sites into a region, like Hangzhou, Shanghai, etc.
      */
     private String sitegroup = StringUtils.EMPTY;
-    
+
+    //默认的健康检查端口
     private int defCkport = 80;
     
     private int defIpPort = -1;
-    
+    //健康检查任务
     @JsonIgnore
     private HealthCheckTask checkTask;
-    
+    //持久的实例
     @JsonIgnore
     private Set<Instance> persistentInstances = new HashSet<>();
-    
+    //临时的实例
     @JsonIgnore
     private Set<Instance> ephemeralInstances = new HashSet<>();
-    
+    //Service
     @JsonIgnore
     private Service service;
-    
+    /**
+     * 是否初始化完成
+     */
     @JsonIgnore
     private volatile boolean inited = false;
-    
+    //元数据
     private Map<String, String> metadata = new ConcurrentHashMap<>();
     
     public Cluster() {
@@ -139,13 +142,15 @@ public class Cluster extends com.alibaba.nacos.api.naming.pojo.Cluster implement
     
     /**
      * Init cluster.
+     * 初始化集群就是启动执行一次健康检测的任务
      */
     public void init() {
         if (inited) {
             return;
         }
+        //HealthCheckTask实现Runnable->run()
         checkTask = new HealthCheckTask(this);
-        
+        //启动任务
         HealthCheckReactor.scheduleCheck(checkTask);
         inited = true;
     }

@@ -33,7 +33,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Global executor for naming.
- *
+ * 给naming使用的全局线程池，这个类看起来还是比较重要的外部分服务的交互的一些线程池都在这里
  * @author nacos
  */
 @SuppressWarnings({"checkstyle:indentation", "PMD.ThreadPoolCreationRule"})
@@ -50,28 +50,39 @@ public class GlobalExecutor {
     private static final long SERVER_STATUS_UPDATE_PERIOD = TimeUnit.SECONDS.toMillis(5);
     
     public static final int DEFAULT_THREAD_COUNT = EnvUtil.getAvailableProcessors(0.5);
-    
+
+    //timer 可以核数的2倍
     private static final ScheduledExecutorService NAMING_TIMER_EXECUTOR = ExecutorFactory.Managed
-            .newScheduledExecutorService(ClassUtils.getCanonicalName(NamingApp.class),
-                    EnvUtil.getAvailableProcessors(2), new NameThreadFactory("com.alibaba.nacos.naming.timer"));
-    
+            .newScheduledExecutorService(
+                    ClassUtils.getCanonicalName(NamingApp.class),
+                    EnvUtil.getAvailableProcessors(2),
+                    new NameThreadFactory("com.alibaba.nacos.naming.timer"));
+
+    /**
+     * ServerListManager->ServerStatusReporter->run()
+     * 在ServerListManager把自己的状态发送给其它的Server
+     * 保持2s一次的固定周期同步给其它的Server
+     */
     private static final ScheduledExecutorService SERVER_STATUS_EXECUTOR = ExecutorFactory.Managed
-            .newSingleScheduledExecutorService(ClassUtils.getCanonicalName(NamingApp.class),
+            .newSingleScheduledExecutorService(
+                    ClassUtils.getCanonicalName(NamingApp.class),
                     new NameThreadFactory("com.alibaba.nacos.naming.status.worker"));
     
     /**
      * Service synchronization executor.
-     *
+     * 同步执行器
      * @deprecated will remove in v2.1.x.
      */
     @Deprecated
     private static final ScheduledExecutorService SERVICE_SYNCHRONIZATION_EXECUTOR = ExecutorFactory.Managed
-            .newSingleScheduledExecutorService(ClassUtils.getCanonicalName(NamingApp.class),
-                    new NameThreadFactory("com.alibaba.nacos.naming.service.worker"));
+            .newSingleScheduledExecutorService(
+                    ClassUtils.getCanonicalName(NamingApp.class),
+                    new NameThreadFactory("com.alibaba.nacos.naming.service.worker")
+            );
     
     /**
      * Service update manager executor.
-     *
+     * ？？不知道
      * @deprecated will remove in v2.1.x.
      */
     @Deprecated
@@ -81,63 +92,106 @@ public class GlobalExecutor {
     
     /**
      * thread pool that processes getting service detail from other server asynchronously.
-     *
+     * 从其它的服务端异步获取service的详情，看样子是server->server同步数据的线程
      * @deprecated will remove in v2.1.x.
      */
     @Deprecated
     private static final ExecutorService SERVICE_UPDATE_EXECUTOR = ExecutorFactory.Managed
-            .newFixedExecutorService(ClassUtils.getCanonicalName(NamingApp.class), 2,
+            .newFixedExecutorService(
+                    ClassUtils.getCanonicalName(NamingApp.class),
+                    2,
                     new NameThreadFactory("com.alibaba.nacos.naming.service.update.http.handler"));
     
     /**
      * Empty service auto clean executor.
-     *
+     * 自动清理？？
      * @deprecated will remove in v2.1.x.
      */
     @Deprecated
     private static final ScheduledExecutorService EMPTY_SERVICE_AUTO_CLEAN_EXECUTOR = ExecutorFactory.Managed
-            .newSingleScheduledExecutorService(ClassUtils.getCanonicalName(NamingApp.class),
+            .newSingleScheduledExecutorService(
+                    ClassUtils.getCanonicalName(NamingApp.class),
                     new NameThreadFactory("com.alibaba.nacos.naming.service.empty.auto-clean"));
-    
+
+    /**
+     * distro.notifier
+     */
     private static final ScheduledExecutorService DISTRO_NOTIFY_EXECUTOR = ExecutorFactory.Managed
-            .newSingleScheduledExecutorService(ClassUtils.getCanonicalName(NamingApp.class),
+            .newSingleScheduledExecutorService(
+                    ClassUtils.getCanonicalName(NamingApp.class),
                     new NameThreadFactory("com.alibaba.nacos.naming.distro.notifier"));
-    
+
+    /**
+     * health-check.notifier
+     */
     private static final ScheduledExecutorService NAMING_HEALTH_CHECK_EXECUTOR = ExecutorFactory.Managed
-            .newSingleScheduledExecutorService(ClassUtils.getCanonicalName(NamingApp.class),
+            .newSingleScheduledExecutorService(
+                    ClassUtils.getCanonicalName(NamingApp.class),
                     new NameThreadFactory("com.alibaba.nacos.naming.health-check.notifier"));
-    
+
+    /**
+     * mysql.checker
+     */
     private static final ExecutorService MYSQL_CHECK_EXECUTOR = ExecutorFactory.Managed
-            .newFixedExecutorService(ClassUtils.getCanonicalName(NamingApp.class), DEFAULT_THREAD_COUNT,
+            .newFixedExecutorService(
+                    ClassUtils.getCanonicalName(NamingApp.class),
+                    DEFAULT_THREAD_COUNT, //一半核数
                     new NameThreadFactory("com.alibaba.nacos.naming.mysql.checker"));
-    
+
+    /**
+     * supersense.checker
+     */
     private static final ScheduledExecutorService TCP_SUPER_SENSE_EXECUTOR = ExecutorFactory.Managed
-            .newScheduledExecutorService(ClassUtils.getCanonicalName(NamingApp.class), DEFAULT_THREAD_COUNT,
+            .newScheduledExecutorService(
+                    ClassUtils.getCanonicalName(NamingApp.class),
+                    DEFAULT_THREAD_COUNT,//一半核数
                     new NameThreadFactory("com.alibaba.nacos.naming.supersense.checker"));
-    
+
+    /**
+     * tcp.check.worker
+     */
     private static final ExecutorService TCP_CHECK_EXECUTOR = ExecutorFactory.Managed
-            .newFixedExecutorService(ClassUtils.getCanonicalName(NamingApp.class), 2,
+            .newFixedExecutorService(
+                    ClassUtils.getCanonicalName(NamingApp.class), 2,
                     new NameThreadFactory("com.alibaba.nacos.naming.tcp.check.worker"));
-    
+
+    /**
+     * naming.health
+     */
     private static final ScheduledExecutorService NAMING_HEALTH_EXECUTOR = ExecutorFactory.Managed
-            .newScheduledExecutorService(ClassUtils.getCanonicalName(NamingApp.class),
-                    Integer.max(Integer.getInteger("com.alibaba.nacos.naming.health.thread.num", DEFAULT_THREAD_COUNT),
-                            1), new NameThreadFactory("com.alibaba.nacos.naming.health"));
-    
+            .newScheduledExecutorService(
+                    ClassUtils.getCanonicalName(NamingApp.class),
+                    Integer.max(Integer.getInteger("com.alibaba.nacos.naming.health.thread.num", DEFAULT_THREAD_COUNT), 1),
+                    new NameThreadFactory("com.alibaba.nacos.naming.health"));
+
+    /**
+     * push.retransmitter
+     */
     private static final ScheduledExecutorService RETRANSMITTER_EXECUTOR = ExecutorFactory.Managed
             .newSingleScheduledExecutorService(ClassUtils.getCanonicalName(NamingApp.class),
                     new NameThreadFactory("com.alibaba.nacos.naming.push.retransmitter"));
-    
+
+    /**
+     * push.udpSender
+     */
     private static final ScheduledExecutorService UDP_SENDER_EXECUTOR = ExecutorFactory.Managed
             .newSingleScheduledExecutorService(ClassUtils.getCanonicalName(NamingApp.class),
                     new NameThreadFactory("com.alibaba.nacos.naming.push.udpSender"));
-    
+
+    /**
+     * nacos-server-performance
+     */
     private static final ScheduledExecutorService SERVER_PERFORMANCE_EXECUTOR = ExecutorFactory.Managed
-            .newSingleScheduledExecutorService(ClassUtils.getCanonicalName(NamingApp.class),
+            .newSingleScheduledExecutorService(
+                    ClassUtils.getCanonicalName(NamingApp.class),
                     new NameThreadFactory("com.alibaba.nacos.naming.nacos-server-performance"));
-    
+
+    /**
+     * remote-connection-manager
+     */
     private static final ScheduledExecutorService EXPIRED_CLIENT_CLEANER_EXECUTOR = ExecutorFactory.Managed
-            .newSingleScheduledExecutorService(ClassUtils.getCanonicalName(NamingApp.class),
+            .newSingleScheduledExecutorService(
+                    ClassUtils.getCanonicalName(NamingApp.class),
                     new NameThreadFactory("com.alibaba.nacos.naming.remote-connection-manager"));
     
     private static final ExecutorService PUSH_CALLBACK_EXECUTOR = ExecutorFactory.Managed
@@ -145,7 +199,7 @@ public class GlobalExecutor {
     
     /**
      * Register raft leader election executor.
-     *
+     * 固定频率选择leader,500ms执行一次
      * @param runnable leader election executor
      * @return future
      * @deprecated will removed with old raft
@@ -193,7 +247,7 @@ public class GlobalExecutor {
     
     /**
      * Submit service update for v1.x.
-     *
+     * 提交service的更新任务，ServiceUpdater->run
      * @param runnable runnable
      * @deprecated will remove in v2.1.x.
      */

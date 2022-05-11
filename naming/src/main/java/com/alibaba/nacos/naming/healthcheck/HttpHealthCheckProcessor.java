@@ -42,7 +42,7 @@ import static com.alibaba.nacos.naming.misc.Loggers.SRV_LOG;
 
 /**
  * HTTP health check processor.
- *
+ * http健康检查器
  * @author xuanyin.zy
  */
 @Component("httpHealthCheckProcessorV1")
@@ -65,6 +65,7 @@ public class HttpHealthCheckProcessor implements HealthCheckProcessor {
     
     @Override
     public void process(HealthCheckTask task) {
+        //获取集群中的所有实例
         List<Instance> ips = task.getCluster().allIPs(false);
         if (CollectionUtils.isEmpty(ips)) {
             return;
@@ -73,12 +74,15 @@ public class HttpHealthCheckProcessor implements HealthCheckProcessor {
         if (!switchDomain.isHealthCheckEnabled()) {
             return;
         }
-        
+
+        //集群
         Cluster cluster = task.getCluster();
-        
+
+        //所有的客户端是否正常
         for (Instance ip : ips) {
             try {
-                
+
+                //标记过
                 if (ip.isMarked()) {
                     if (SRV_LOG.isDebugEnabled()) {
                         SRV_LOG.debug("http check, ip is marked as to skip health check, ip: {}" + ip.getIp());
@@ -94,7 +98,7 @@ public class HttpHealthCheckProcessor implements HealthCheckProcessor {
                             switchDomain.getHttpHealthParams());
                     continue;
                 }
-                
+                //http 检查器
                 Http healthChecker = (Http) cluster.getHealthChecker();
                 
                 int ckPort = cluster.isUseIPPort4Check() ? ip.getPort() : cluster.getDefCkport();
@@ -103,9 +107,12 @@ public class HttpHealthCheckProcessor implements HealthCheckProcessor {
                 Map<String, String> customHeaders = healthChecker.getCustomHeaders();
                 Header header = Header.newInstance();
                 header.addAll(customHeaders);
-    
+
+                //核心方法：见HttpHealthCheckCallback->run()
                 ASYNC_REST_TEMPLATE.get(target.toString(), header, Query.EMPTY, String.class,
                         new HttpHealthCheckCallback(ip, task));
+
+                //AtomicInteger incrementAndGet
                 MetricsMonitor.getHttpHealthCheckMonitor().incrementAndGet();
             } catch (Throwable e) {
                 ip.setCheckRt(switchDomain.getHttpHealthParams().getMax());
@@ -131,19 +138,25 @@ public class HttpHealthCheckProcessor implements HealthCheckProcessor {
         
         @Override
         public void onReceive(RestResult<String> result) {
+            //chenckRt时间
             ip.setCheckRt(System.currentTimeMillis() - startTime);
             
             int httpCode = result.getCode();
+
+            //正常，HTTP_OK
             if (HttpURLConnection.HTTP_OK == httpCode) {
                 healthCheckCommon.checkOK(ip, task, "http:" + httpCode);
+                //重新计算响应时间
                 healthCheckCommon.reEvaluateCheckRT(System.currentTimeMillis() - startTime, task,
                         switchDomain.getHttpHealthParams());
+            //服务繁忙，晚点再次验证
             } else if (HttpURLConnection.HTTP_UNAVAILABLE == httpCode
                     || HttpURLConnection.HTTP_MOVED_TEMP == httpCode) {
                 // server is busy, need verification later
                 healthCheckCommon.checkFail(ip, task, "http:" + httpCode);
                 healthCheckCommon
                         .reEvaluateCheckRT(task.getCheckRtNormalized() * 2, task, switchDomain.getHttpHealthParams());
+            //
             } else {
                 //probably means the state files has been removed by administrator
                 healthCheckCommon.checkFailNow(ip, task, "http:" + httpCode);

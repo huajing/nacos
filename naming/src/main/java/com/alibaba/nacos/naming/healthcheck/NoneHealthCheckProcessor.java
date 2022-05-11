@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Health checker that does nothing.
- *
+ * 不做健康检查
  * @author nkorange
  * @since 1.0.0
  */

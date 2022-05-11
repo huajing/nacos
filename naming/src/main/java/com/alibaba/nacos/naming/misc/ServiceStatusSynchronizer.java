@@ -29,7 +29,8 @@ import java.util.Map;
 
 /**
  * Service status ynchronizer.
- *
+ * Service的状态同步器
+ * 核心方法：send/get
  * @author nacos
  */
 public class ServiceStatusSynchronizer implements Synchronizer {

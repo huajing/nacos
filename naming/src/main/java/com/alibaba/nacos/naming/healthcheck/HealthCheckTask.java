@@ -28,7 +28,7 @@ import com.alibaba.nacos.common.utils.RandomUtils;
 
 /**
  * Health check task.
- *
+ * 实现Runnable
  * @author nacos
  */
 public class HealthCheckTask implements Runnable {
@@ -60,6 +60,7 @@ public class HealthCheckTask implements Runnable {
     
     public HealthCheckTask(Cluster cluster) {
         this.cluster = cluster;
+        //如何在非service里获取bean
         distroMapper = ApplicationUtils.getBean(DistroMapper.class);
         switchDomain = ApplicationUtils.getBean(SwitchDomain.class);
         healthCheckProcessor = ApplicationUtils.getBean(HealthCheckProcessorDelegate.class);
@@ -79,11 +80,15 @@ public class HealthCheckTask implements Runnable {
         
         try {
             // If upgrade to 2.0.X stop health check with v1
+            //如果升级到2.0则不用检查心跳
             if (ApplicationUtils.getBean(UpgradeJudgement.class).isUseGrpcFeatures()) {
                 return;
             }
+            //条件判断
             if (distroMapper.responsible(cluster.getService().getName()) && switchDomain
                     .isHealthCheckEnabled(cluster.getService().getName())) {
+
+                //核心代码：HealthCheckProcessorDelegate->(process)
                 healthCheckProcessor.process(this);
                 if (Loggers.EVT_LOG.isDebugEnabled()) {
                     Loggers.EVT_LOG

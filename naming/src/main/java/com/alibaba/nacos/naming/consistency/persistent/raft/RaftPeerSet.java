@@ -182,32 +182,43 @@ public class RaftPeerSet extends MemberChangeListener implements Closeable {
      * @return new leader if new candidate has more than half vote, otherwise old leader
      */
     public RaftPeer decideLeader(RaftPeer candidate) {
+        //Map<String, RaftPeer> peers = null;
+        //更新本地peers
         peers.put(candidate.ip, candidate);
-        
+
+        //随机森林,决策树
         SortedBag ips = new TreeBag();
+        //最大赞同数
         int maxApproveCount = 0;
         String maxApprovePeer = null;
+
+        //找最大投数
         for (RaftPeer peer : peers.values()) {
-            if (StringUtils.isEmpty(peer.voteFor)) {
-                continue;
-            }
-            
-            ips.add(peer.voteFor);
+            //没有投票
+            if (StringUtils.isEmpty(peer.voteFor)) {continue;}
+
+            ips.add(peer.voteFor);//投1票给peer.voteFor
             if (ips.getCount(peer.voteFor) > maxApproveCount) {
                 maxApproveCount = ips.getCount(peer.voteFor);
                 maxApprovePeer = peer.voteFor;
             }
         }
-        
+
+        //半数通过
         if (maxApproveCount >= majorityCount()) {
-            RaftPeer peer = peers.get(maxApprovePeer);
-            peer.state = RaftPeer.State.LEADER;
+            RaftPeer peer = peers.get(maxApprovePeer);//最大票数的peer
+            peer.state = RaftPeer.State.LEADER;//成为leader
             
-            if (!Objects.equals(leader, peer)) {
-                leader = peer;
+            if (!Objects.equals(leader, peer)) {//不是自己
+                leader = peer;//更新leader
+
+                //通知别人新的leader产生，RaftListener->onApplicationEvent
+                //将消息同步给其它的结点，等待下次选举的到来
                 ApplicationUtils.publishEvent(new LeaderElectFinishedEvent(this, leader, local()));
                 Loggers.RAFT.info("{} has become the LEADER", leader.ip);
             }
+        }else {
+            //还是老leader啊
         }
         
         return leader;

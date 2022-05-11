@@ -245,7 +245,8 @@ public class ServiceController {
     
     /**
      * Check service status whether latest.
-     *
+     * 检查服务的状态是否是最新的
+     * 假设是从结点向leader调用？？
      * @param request http request
      * @return 'ok' if service status if latest, otherwise 'fail' or exception
      * @throws Exception exception
@@ -258,20 +259,25 @@ public class ServiceController {
         String entity = IoUtils.toString(request.getInputStream(), "UTF-8");
         String value = URLDecoder.decode(entity, "UTF-8");
         JsonNode json = JacksonUtils.toObj(value);
-        
+
+        //从请求中解析数据
         //format: service1@@checksum@@@service2@@checksum
         String statuses = json.get("statuses").asText();
+        //客户端的ip,也就是请求机器的ip地址
         String serverIp = json.get("clientIP").asText();
-        
+
+        //serverIp在集群中
         if (!memberManager.hasMember(serverIp)) {
             throw new NacosException(NacosException.INVALID_PARAM, "ip: " + serverIp + " is not in serverlist");
         }
         
         try {
+            //将请请求中的statuses转化为检验码对象
             ServiceManager.ServiceChecksum checksums = JacksonUtils
                     .toObj(statuses, ServiceManager.ServiceChecksum.class);
             if (checksums == null) {
                 Loggers.SRV_LOG.warn("[DOMAIN-STATUS] receive malformed data: null");
+                //请求中的数据不对，直接返回错误
                 return "fail";
             }
             
@@ -279,21 +285,28 @@ public class ServiceController {
                 if (entry == null || StringUtils.isEmpty(entry.getKey()) || StringUtils.isEmpty(entry.getValue())) {
                     continue;
                 }
+                //主要数据1，服务名
                 String serviceName = entry.getKey();
+                //主要数据2，校验码
                 String checksum = entry.getValue();
+
+                //获取取指向命名空间下服务名的服务
                 Service service = serviceManager.getService(checksums.namespaceId, serviceName);
                 
                 if (service == null) {
                     continue;
                 }
-                
+
+                //重新计算本结点的校验码
                 service.recalculateChecksum();
-                
+
+                //比较请求结点与本地结点校验码是否一致
                 if (!checksum.equals(service.getChecksum())) {
                     if (Loggers.SRV_LOG.isDebugEnabled()) {
                         Loggers.SRV_LOG.debug("checksum of {} is not consistent, remote: {}, checksum: {}, local: {}",
                                 serviceName, serverIp, checksum, service.getChecksum());
                     }
+                    //不一致就加入到队列中启动推送任务
                     serviceManager.addUpdatedServiceToQueue(checksums.namespaceId, serviceName, serverIp, checksum);
                 }
             }
@@ -333,7 +346,7 @@ public class ServiceController {
     
     /**
      * get subscriber list.
-     *
+     * 分页获取订阅列表
      * @param request http request
      * @return Jackson object node
      */

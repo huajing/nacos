@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 
 /**
  * Delegate of health check.
- *
+ * 健康检查的代码，最终还是调用对手的HealthCheck来做检查
  * @author nacos
  */
 @Component("healthCheckDelegate")

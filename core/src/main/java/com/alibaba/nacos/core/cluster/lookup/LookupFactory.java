@@ -136,6 +136,7 @@ public final class LookupFactory {
         FILE_CONFIG(1, "file"),
         
         /**
+         * 地址服务器
          * Address server addressing mode.
          */
         ADDRESS_SERVER(2, "address-server");

@@ -260,7 +260,7 @@ public class OperatorController {
     
     /**
      * This interface will be removed in a future release.
-     *
+     * 接收其它server的状态
      * @param serverStatus server status
      * @return "ok"
      * @deprecated 1.3.0 This function will be deleted sometime after version 1.3.0

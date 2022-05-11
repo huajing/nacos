@@ -82,7 +82,10 @@ public class ServiceManager implements RecordListener<Service> {
      * Map(namespace, Map(group::serviceName, Service)).
      */
     private final Map<String, Map<String, Service>> serviceMap = new ConcurrentHashMap<>();
-    
+
+    /**
+     * 阻塞队列,监听是否有service发生变化
+     */
     private final LinkedBlockingDeque<ServiceKey> toBeUpdatedServicesQueue = new LinkedBlockingDeque<>(1024 * 1024);
     
     private final Synchronizer synchronizer = new ServiceStatusSynchronizer();
@@ -124,7 +127,8 @@ public class ServiceManager implements RecordListener<Service> {
     @PostConstruct
     public void init() {
         GlobalExecutor.scheduleServiceReporter(new ServiceReporter(), 60000, TimeUnit.MILLISECONDS);
-        
+
+        //启动阻塞队列，监听service变化
         GlobalExecutor.submitServiceUpdateManager(new UpdatedServiceProcessor());
         
         if (emptyServiceAutoClean) {
@@ -157,11 +161,11 @@ public class ServiceManager implements RecordListener<Service> {
     
     /**
      * Add a service into queue to update.
-     *
-     * @param namespaceId namespace
-     * @param serviceName service name
-     * @param serverIP    target server ip
-     * @param checksum    checksum of service
+     * 添加一个serice到队列,UpdatedServiceProcessor -> run() 即会执行take()
+     * @param namespaceId namespace 服务所在的命名空间
+     * @param serviceName service name 服务的名称
+     * @param serverIP    target server ip 服务的ip
+     * @param checksum    checksum of service 校验码
      */
     public synchronized void addUpdatedServiceToQueue(String namespaceId, String serviceName, String serverIP, String checksum) {
         try {
@@ -239,8 +243,10 @@ public class ServiceManager implements RecordListener<Service> {
             ServiceKey serviceKey = null;
             
             try {
+                //死循环一直监听service变化
                 while (true) {
                     try {
+                        //阻塞队列，获得数据向下执行，添加见addUpdatedServiceToQueue
                         serviceKey = toBeUpdatedServicesQueue.take();
                     } catch (Exception e) {
                         Loggers.EVT_LOG.error("[UPDATE-DOMAIN] Exception while taking item from LinkedBlockingDeque.");
@@ -249,6 +255,7 @@ public class ServiceManager implements RecordListener<Service> {
                     if (serviceKey == null) {
                         continue;
                     }
+                    //提交服务更新--》ServiceUpdater->run->updatedHealthStatus
                     GlobalExecutor.submitServiceUpdate(new ServiceUpdater(serviceKey));
                 }
             } catch (Exception e) {
@@ -256,7 +263,11 @@ public class ServiceManager implements RecordListener<Service> {
             }
         }
     }
-    
+
+    /**
+     * 如何定位一个Service
+     * namespaceId+serviceName+serverIP
+     */
     private class ServiceUpdater implements Runnable {
         
         String namespaceId;
@@ -274,6 +285,7 @@ public class ServiceManager implements RecordListener<Service> {
         @Override
         public void run() {
             try {
+                //更新健康状态
                 updatedHealthStatus(namespaceId, serviceName, serverIP);
             } catch (Exception e) {
                 Loggers.SRV_LOG
@@ -289,15 +301,17 @@ public class ServiceManager implements RecordListener<Service> {
     
     /**
      * Update health status of instance in service.
-     *
+     * 更新service中实例的健康状态
      * @param namespaceId namespace
      * @param serviceName service name
      * @param serverIP    source server Ip
      */
     public void updatedHealthStatus(String namespaceId, String serviceName, String serverIP) {
+        //synchronizer=ServiceStatusSynchronizer，从serverIP拿Message
         Message msg = synchronizer.get(serverIP, UtilsAndCommons.assembleFullServiceName(namespaceId, serviceName));
         JsonNode serviceJson = JacksonUtils.toObj(msg.getData());
-        
+
+        //namespaceId+serviceName+serverIP有那些ip
         ArrayNode ipList = (ArrayNode) serviceJson.get("ips");
         Map<String, String> ipsMap = new HashMap<>(ipList.size());
         for (int i = 0; i < ipList.size(); i++) {
@@ -306,7 +320,7 @@ public class ServiceManager implements RecordListener<Service> {
             String[] strings = ip.split("_");
             ipsMap.put(strings[0], strings[1]);
         }
-        
+        //获取服务
         Service service = getService(namespaceId, serviceName);
         
         if (service == null) {
@@ -314,22 +328,26 @@ public class ServiceManager implements RecordListener<Service> {
         }
         
         boolean changed = false;
-        
+        //service所有的实例
         List<Instance> instances = service.allIPs();
         for (Instance instance : instances) {
-            
+            //参数serverIP对应机器上的有效状态
             boolean valid = Boolean.parseBoolean(ipsMap.get(instance.toIpAddr()));
-            if (valid != instance.isHealthy()) {
-                changed = true;
-                instance.setHealthy(valid);
+            //instance为本机实例的状态，对比是否一致
+            if (valid != instance.isHealthy()) {//状态不一致
+                changed = true;//标点实例状态有变化
+                instance.setHealthy(valid);//设置为对方机实例的健康状态？不明白
                 Loggers.EVT_LOG.info("{} {SYNC} IP-{} : {}:{}@{}", serviceName,
                         (instance.isHealthy() ? "ENABLED" : "DISABLED"), instance.getIp(), instance.getPort(),
                         instance.getClusterName());
             }
         }
-        
+
+        //只要有一个服务状态发生变化
         if (changed) {
             pushService.serviceChanged(service);
+
+            //log不用看
             if (Loggers.EVT_LOG.isDebugEnabled()) {
                 StringBuilder stringBuilder = new StringBuilder();
                 List<Instance> allIps = service.allIPs();
@@ -1081,7 +1099,7 @@ public class ServiceManager implements RecordListener<Service> {
                 }
                 
                 for (String namespaceId : allServiceNames.keySet()) {
-                    
+                    //每个命名空间一个校验码
                     ServiceChecksum checksum = new ServiceChecksum(namespaceId);
                     
                     for (String serviceName : allServiceNames.get(namespaceId)) {
@@ -1094,7 +1112,8 @@ public class ServiceManager implements RecordListener<Service> {
                         if (service == null || service.isEmpty()) {
                             continue;
                         }
-                        
+
+                        //重新计算检验码
                         service.recalculateChecksum();
                         
                         checksum.addItem(serviceName, service.getChecksum());
@@ -1103,17 +1122,20 @@ public class ServiceManager implements RecordListener<Service> {
                     Message msg = new Message();
                     
                     msg.setData(JacksonUtils.toJson(checksum));
-                    
+
+                    //其它Server结点
                     Collection<Member> sameSiteServers = memberManager.allMembers();
                     
                     if (sameSiteServers == null || sameSiteServers.size() <= 0) {
                         return;
                     }
-                    
+
+                    //同步给其它的Server
                     for (Member server : sameSiteServers) {
                         if (server.getAddress().equals(NetUtils.localServer())) {
                             continue;
                         }
+                        //发送信息给每一个Server
                         synchronizer.send(server.getAddress(), msg);
                     }
                 }

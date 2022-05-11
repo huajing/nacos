@@ -25,7 +25,7 @@ public interface Synchronizer {
     
     /**
      * Send message to server.
-     *
+     * 发送消息到别的server
      * @param serverIp target server address
      * @param msg      message to send
      */
@@ -33,7 +33,7 @@ public interface Synchronizer {
     
     /**
      * Get message from server using message key.
-     *
+     * 用消息key从别的server获取message
      * @param serverIp source server address
      * @param key      message key
      * @return message

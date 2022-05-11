@@ -33,7 +33,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Inject the raft information from the naming module into the outlier information of the node.
- *
+ * 接收事件的通过
  * @deprecated will remove in 1.4.x
  * @author <a href="mailto:liaochuntao@live.com">liaochuntao</a>
  */

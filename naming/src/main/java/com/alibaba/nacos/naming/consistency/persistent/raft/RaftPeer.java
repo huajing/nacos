@@ -37,7 +37,7 @@ public class RaftPeer {
     public String voteFor;
     
     public AtomicLong term = new AtomicLong(0L);
-    
+    //leader的在时间15s
     public volatile long leaderDueMs = RandomUtils.nextLong(0, GlobalExecutor.LEADER_TIMEOUT_MS);
     
     public volatile long heartbeatDueMs = RandomUtils.nextLong(0, GlobalExecutor.HEARTBEAT_INTERVAL_MS);
@@ -45,6 +45,8 @@ public class RaftPeer {
     public volatile State state = State.FOLLOWER;
     
     public void resetLeaderDue() {
+        //固定时间+随机时间 15s+(0-5)s
+        //等待下次leader选择的时间，每个结点都可能会发起投票，由于有随机数，时间不定的，不知道下一秒由那个结点发起投票，有点意思啊
         leaderDueMs = GlobalExecutor.LEADER_TIMEOUT_MS + RandomUtils.nextLong(0, GlobalExecutor.RANDOM_MS);
     }
     

@@ -38,7 +38,7 @@ import java.util.Map;
 
 /**
  * Cluster member addressing mode for the address server.
- *
+ * 地址服务器寻址，就是统一向一个web器获取cluster.conf的内容，这样做到统一管理
  * @author <a href="mailto:liaochuntao@live.com">liaochuntao</a>
  */
 public class AddressServerMemberLookup extends AbstractMemberLookup {

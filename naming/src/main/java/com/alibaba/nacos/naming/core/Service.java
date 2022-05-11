@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
+ *
  * Service of Nacos server side
  *
  * <p>We introduce a 'service --> cluster --> instance' model, in which service stores a list of clusters, which
@@ -543,6 +544,7 @@ public class Service extends com.alibaba.nacos.api.naming.pojo.Service implement
     }
     
     /**
+     * 重新计算检验码，服务列表拼接再取md5值
      * Re-calculate checksum of service.
      */
     public synchronized void recalculateChecksum() {

@@ -119,7 +119,7 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
         this.applicationContext = applicationContext;
     }
 
-    //收到spring的事件通知
+    //收到spring的事件通知，服务发生变更的通知
     @Override
     public void onApplicationEvent(ServiceChangeEvent event) {
         // If upgrade to 2.0.X, do not push for v1.
@@ -151,15 +151,12 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
                 for (PushClient client : clients.values()) {
                     //僵尸客户端，移除
                     if (client.zombie()) {
-                        Loggers.PUSH.debug("client is zombie: " + client);
                         //client.toString() 作为Map的key,PushClient覆盖了toString()方法
                         clients.remove(client.toString());
-                        Loggers.PUSH.debug("client is zombie: " + client);
                         continue;
                     }
                     
                     AckEntry ackEntry;
-                    Loggers.PUSH.debug("push serviceName: {} to client: {}", serviceName, client);
                     String key = getPushCacheKey(serviceName, client.getIp(), client.getAgent());
                     byte[] compressData = null;
                     Map<String, Object> data = null;
@@ -167,8 +164,6 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
                         org.javatuples.Pair pair = (org.javatuples.Pair) cache.get(key);
                         compressData = (byte[]) (pair.getValue0());
                         data = (Map<String, Object>) pair.getValue1();
-                        
-                        Loggers.PUSH.debug("[PUSH-CACHE] cache hit: {}:{}", serviceName, client.getAddrStr());
                     }
                     
                     if (compressData != null) {
@@ -176,16 +171,12 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
                     } else {
                         ackEntry = prepareAckEntry(client, prepareHostsData(client), lastRefTime);
                         if (ackEntry != null) {
-                            cache.put(key,
-                                    new org.javatuples.Pair<>(ackEntry.getOrigin().getData(), ackEntry.getData()));
+                            cache.put(key, new org.javatuples.Pair<>(ackEntry.getOrigin().getData(), ackEntry.getData()));
                         }
                     }
-                    
-                    Loggers.PUSH.info("serviceName: {} changed, schedule push for: {}, agent: {}, key: {}",
-                            client.getServiceName(), client.getAddrStr(), client.getAgent(),
-                            (ackEntry == null ? null : ackEntry.getKey()));
 
-                    //核心逻辑，给一个client推送udp数据，上面一大段方法都在豆构造ackEntry对象
+                    //核心逻辑，给每一个client推送udp数据，上面一大段方法都在构造ackEntry对象
+                    //起因就是因为有机器调用/vi/ns/service/status,但发现有Service与请求机器中状态不一致
                     udpPush(ackEntry);
                 }
             } catch (Exception e) {
@@ -301,7 +292,7 @@ public class UdpPushService implements ApplicationContextAware, ApplicationListe
      * Service changed.
      * 1、本对象UdpPushService implements ApplicationContextAware, ApplicationListener<ServiceChangeEvent>，可以接收事件
      * 2、@Component，且实现ApplicationContextAware，在spring中自动注入bean
-     *
+     * 3、调用本类中的 onApplicationEvent
      * @param service service
      */
     public void serviceChanged(Service service) {

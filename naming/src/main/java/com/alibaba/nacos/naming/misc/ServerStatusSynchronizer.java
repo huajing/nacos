@@ -41,11 +41,12 @@ public class ServerStatusSynchronizer implements Synchronizer {
         }
         
         final Map<String, String> params = new HashMap<String, String>(2);
-    
+
+        //把msg放serverStatus参数里
         params.put(FieldsConstants.SERVICE_STATUS, msg.getData());
         
         String url = "http://" + serverIp + ":" + EnvUtil.getPort() + EnvUtil.getContextPath()
-                + UtilsAndCommons.NACOS_NAMING_CONTEXT + "/operator/server/status";
+                + UtilsAndCommons.NACOS_NAMING_CONTEXT + "/v1/ns/operator/server/status";
         
         if (InternetAddressUtil.containsPort(serverIp)) {
             url = "http://" + serverIp + EnvUtil.getContextPath() + UtilsAndCommons.NACOS_NAMING_CONTEXT

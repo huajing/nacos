@@ -24,6 +24,7 @@ import com.alibaba.nacos.sys.utils.InetUtils;
 import java.util.Collections;
 
 /**
+ * 单机寻址，只有单机部署时使用
  * Member node addressing mode in stand-alone mode.
  *
  * @author <a href="mailto:liaochuntao@live.com">liaochuntao</a>

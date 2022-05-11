@@ -1,5 +1,8 @@
 package com.alibaba.nacos.example;
 
+import org.apache.commons.collections.SortedBag;
+import org.apache.commons.collections.bag.TreeBag;
+
 import java.util.concurrent.LinkedBlockingDeque;
 
 /**
@@ -35,5 +38,19 @@ public class MyTest {
 
         Thread.sleep(3000);
         deque.add(1);
+
+
+        SortedBag ips = new TreeBag();
+        ips.add("001");
+        ips.add("001");
+        ips.add("001");
+
+        ips.add("002");
+        ips.add("002");
+        ips.add("002");
+        ips.add("002");
+
+        System.out.println(ips.getCount("001"));
+        System.out.println(ips.getCount("002"));
     }
 }
