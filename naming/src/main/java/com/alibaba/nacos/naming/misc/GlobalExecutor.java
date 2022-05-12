@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Global executor for naming.
  * 给naming使用的全局线程池，这个类看起来还是比较重要的外部分服务的交互的一些线程池都在这里
+ * 看明白这里的逻辑，整个nacos的运行也了解差不多了，所以我要从这里开始
  * @author nacos
  */
 @SuppressWarnings({"checkstyle:indentation", "PMD.ThreadPoolCreationRule"})
@@ -42,7 +43,9 @@ public class GlobalExecutor {
     public static final long HEARTBEAT_INTERVAL_MS = TimeUnit.SECONDS.toMillis(5L);
     
     public static final long LEADER_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(15L);
-    
+
+    //每一个结点能发起leader投票的一个延迟随机，看起来的意思是减少同一时间发起投票的可能性，
+    //因为投票的时候每个结点都会触发投的，只是大家的延迟时间不一样
     public static final long RANDOM_MS = TimeUnit.SECONDS.toMillis(5L);
     
     public static final long TICK_PERIOD_MS = TimeUnit.MILLISECONDS.toMillis(500L);
@@ -70,7 +73,7 @@ public class GlobalExecutor {
     
     /**
      * Service synchronization executor.
-     * 同步执行器
+     * 同步执行器 ServiceReporter -> run
      * @deprecated will remove in v2.1.x.
      */
     @Deprecated
@@ -82,7 +85,7 @@ public class GlobalExecutor {
     
     /**
      * Service update manager executor.
-     * ？？不知道
+     * ？？不知道 UpdatedServiceProcessor -> run()
      * @deprecated will remove in v2.1.x.
      */
     @Deprecated
@@ -122,7 +125,7 @@ public class GlobalExecutor {
                     new NameThreadFactory("com.alibaba.nacos.naming.distro.notifier"));
 
     /**
-     * health-check.notifier
+     * health-check.notifier,启动了没有使用到
      */
     private static final ScheduledExecutorService NAMING_HEALTH_CHECK_EXECUTOR = ExecutorFactory.Managed
             .newSingleScheduledExecutorService(
@@ -130,7 +133,7 @@ public class GlobalExecutor {
                     new NameThreadFactory("com.alibaba.nacos.naming.health-check.notifier"));
 
     /**
-     * mysql.checker
+     * mysql.checker，没有看明白为啥要这个
      */
     private static final ExecutorService MYSQL_CHECK_EXECUTOR = ExecutorFactory.Managed
             .newFixedExecutorService(
@@ -200,7 +203,7 @@ public class GlobalExecutor {
     /**
      * Register raft leader election executor.
      * 固定频率选择leader,500ms执行一次
-     * @param runnable leader election executor
+     * @param runnable leader election executor RaftCore -> MasterElection
      * @return future
      * @deprecated will removed with old raft
      */
@@ -223,7 +226,7 @@ public class GlobalExecutor {
     
     /**
      * Register raft heart beat executor.
-     *
+     * 注册leader发送心跳的executor
      * @param runnable heart beat executor
      * @return future
      * @deprecated will removed with old raft
@@ -271,8 +274,8 @@ public class GlobalExecutor {
     
     /**
      * submitServiceUpdateManager.
-     *
-     * @param runnable runnable
+     * 监听阻塞队列的service变化，有变化就去更新
+     * @param runnable runnable UpdatedServiceProcessor -> run
      * @deprecated will remove in v2.1.x.
      */
     @Deprecated
@@ -282,7 +285,7 @@ public class GlobalExecutor {
     
     /**
      * scheduleServiceReporter.
-     *
+     * 定时把本server中的服务报告给别的server，如果有不一致就更新，但到底以谁的为准？？，还需要继续看源码啊
      * @param command command
      * @param delay   delay
      * @param unit    time unit

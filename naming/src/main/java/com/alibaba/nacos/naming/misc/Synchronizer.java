@@ -35,7 +35,7 @@ public interface Synchronizer {
      * Get message from server using message key.
      * 用消息key从别的server获取message
      * @param serverIp source server address
-     * @param key      message key
+     * @param key      message key 所谓的key只是一个拼接而已，真不高级 namespaceId##serviceName
      * @return message
      */
     Message get(String serverIp, String key);

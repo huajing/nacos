@@ -28,7 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Service status ynchronizer.
+ * Service（服务） status ynchronizer.
  * Service的状态同步器
  * 核心方法：send/get
  * @author nacos
@@ -44,8 +44,9 @@ public class ServiceStatusSynchronizer implements Synchronizer {
         Map<String, String> params = new HashMap<String, String>(10);
     
         params.put(FieldsConstants.STATUSES, msg.getData());
-        params.put(FieldsConstants.CLIENT_IP, NetUtils.localServer());
-        
+        params.put(FieldsConstants.CLIENT_IP, NetUtils.localServer());//自己的ip
+
+        // /v1/ns/service/status
         String url = "http://" + serverIp + ":" + EnvUtil.getPort() + EnvUtil.getContextPath()
                 + UtilsAndCommons.NACOS_NAMING_CONTEXT + "/service/status";
         
@@ -55,6 +56,7 @@ public class ServiceStatusSynchronizer implements Synchronizer {
         }
         
         try {
+            //发送服务的状态
             HttpClient.asyncHttpPostLarge(url, null, JacksonUtils.toJson(params), new Callback<String>() {
                 @Override
                 public void onReceive(RestResult<String> result) {
@@ -80,7 +82,13 @@ public class ServiceStatusSynchronizer implements Synchronizer {
         }
         
     }
-    
+
+    /**
+     * 直接拿取别的server的service信息
+     * @param serverIp source server address
+     * @param key      message key
+     * @return
+     */
     @Override
     public Message get(String serverIp, String key) {
         if (serverIp == null) {
@@ -96,6 +104,8 @@ public class ServiceStatusSynchronizer implements Synchronizer {
             if (Loggers.SRV_LOG.isDebugEnabled()) {
                 Loggers.SRV_LOG.debug("[STATUS-SYNCHRONIZE] sync service status from: {}, service: {}", serverIp, key);
             }
+
+            //简单粗暴，直接用户对方的server的api拿到服务列表信息
             result = NamingProxy
                     .reqApi(EnvUtil.getContextPath() + UtilsAndCommons.NACOS_NAMING_CONTEXT + "/instance/"
                             + "statuses", params, serverIp);

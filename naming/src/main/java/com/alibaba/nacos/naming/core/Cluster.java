@@ -66,7 +66,7 @@ public class Cluster extends com.alibaba.nacos.api.naming.pojo.Cluster implement
     //临时的实例
     @JsonIgnore
     private Set<Instance> ephemeralInstances = new HashSet<>();
-    //Service
+    //Service,与Cluster是1对1的关系？？？
     @JsonIgnore
     private Service service;
     /**

@@ -104,7 +104,7 @@ public class RaftController {
     
     /**
      * Beat api.
-     *
+     * 接收leader发送的心跳,只的follow可以据此到
      * @param request  http request
      * @param response http response
      * @return peer information
@@ -118,9 +118,9 @@ public class RaftController {
         String entity = new String(IoUtils.tryDecompress(request.getInputStream()), StandardCharsets.UTF_8);
         String value = URLDecoder.decode(entity, "UTF-8");
         value = URLDecoder.decode(value, "UTF-8");
-        
+        //解压leader的数据
         JsonNode json = JacksonUtils.toObj(value);
-        
+        //接收心跳
         RaftPeer peer = raftCore.receivedBeat(JacksonUtils.toObj(json.get("beat").asText()));
         
         return JacksonUtils.transferToJsonNode(peer);

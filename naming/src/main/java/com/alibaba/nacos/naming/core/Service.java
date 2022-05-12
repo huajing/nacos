@@ -51,7 +51,8 @@ import java.util.Map;
 /**
  *
  * Service of Nacos server side
- *
+ * 服务的对象，服务的意思是order, user, goods这些
+ * 一个服务包含有很多的实例(instance)，一个instance就是ip+port
  * <p>We introduce a 'service --> cluster --> instance' model, in which service stores a list of clusters, which
  * contain a list of instances.
  *
@@ -97,7 +98,10 @@ public class Service extends com.alibaba.nacos.api.naming.pojo.Service implement
      * TODO set customized push expire time.
      */
     private long pushCacheMillis = 0L;
-    
+
+    /**
+     * 实例下为啥有集群，好像不大明白？？？，估计是这个实例在那些集群中，后续再看一下
+     */
     private Map<String, Cluster> clusterMap = new HashMap<>();
     
     public Service() {
@@ -322,13 +326,13 @@ public class Service extends com.alibaba.nacos.api.naming.pojo.Service implement
     
     /**
      * Judge whether service has instance.
-     *
+     * 判断是否服务有实例
      * @return true if no instance, otherwise false
      */
     public boolean isEmpty() {
         for (Map.Entry<String, Cluster> entry : clusterMap.entrySet()) {
             final Cluster cluster = entry.getValue();
-            if (!cluster.isEmpty()) {
+            if (!cluster.isEmpty()) {//ephemeralInstances和persistentInstances都为空的情况
                 return false;
             }
         }
@@ -337,7 +341,7 @@ public class Service extends com.alibaba.nacos.api.naming.pojo.Service implement
     
     /**
      * Get all instance.
-     *
+     * 当前服务下的所有实例
      * @return list of all instance
      */
     public List<Instance> allIPs() {
@@ -558,6 +562,7 @@ public class Service extends com.alibaba.nacos.api.naming.pojo.Service implement
         }
         
         if (CollectionUtils.isNotEmpty(ips)) {
+            //记得要排序，先排序再拼接
             Collections.sort(ips);
         }
         
@@ -567,7 +572,7 @@ public class Service extends com.alibaba.nacos.api.naming.pojo.Service implement
             ipsString.append(string);
             ipsString.append(',');
         }
-        
+        //服务报告的校验数据，对各项目数据拼接值的md5值
         checksum = MD5Utils.md5Hex(ipsString.toString(), Constants.ENCODE);
     }
     

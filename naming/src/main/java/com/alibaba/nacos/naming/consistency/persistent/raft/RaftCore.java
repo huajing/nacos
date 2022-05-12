@@ -78,7 +78,7 @@ import java.util.zip.GZIPOutputStream;
 
 /**
  * Raft core code.
- *
+ * 选举的核心逻辑
  * @author nacos
  * @deprecated will remove in 1.4.x
  */
@@ -152,7 +152,7 @@ public class RaftCore implements Closeable {
     
     /**
      * Init raft core.
-     *
+     * 初始化
      * @throws Exception any exception during init
      */
     @PostConstruct
@@ -172,6 +172,7 @@ public class RaftCore implements Closeable {
 
         //注册master选举
         masterTask = GlobalExecutor.registerMasterElection(new MasterElection());
+        //注册发送心跳
         heartbeatTask = GlobalExecutor.registerHeartbeat(new HeartBeat());
         
         versionJudgement.registerObserver(isAllNewVersion -> {
@@ -600,7 +601,10 @@ public class RaftCore implements Closeable {
         
         return local;
     }
-    
+
+    /**
+     * 发送心跳的任务
+     */
     public class HeartBeat implements Runnable {
         
         @Override
@@ -618,9 +622,12 @@ public class RaftCore implements Closeable {
                 if (local.heartbeatDueMs > 0) {
                     return;
                 }
-                
+                /**
+                 * 重置duration时间，在这个时间不会发送心跳，只会接收别的server的心跳
+                 */
                 local.resetHeartbeatDue();
-                
+
+                //发送心跳
                 sendBeat();
             } catch (Exception e) {
                 Loggers.RAFT.warn("[RAFT] error while sending beat {}", e);
@@ -629,49 +636,50 @@ public class RaftCore implements Closeable {
         }
         
         private void sendBeat() throws IOException, InterruptedException {
+            //自己
             RaftPeer local = peers.local();
+            //只在集群模式下，leader才发向其它server发送心跳，这一点与选举不同，选择不判断这个
             if (EnvUtil.getStandaloneMode() || local.state != RaftPeer.State.LEADER) {
                 return;
             }
             if (Loggers.RAFT.isDebugEnabled()) {
                 Loggers.RAFT.debug("[RAFT] send beat with {} keys.", datums.size());
             }
-            
+            //重置leader的duration时间
             local.resetLeaderDue();
             
-            // build data
-            ObjectNode packet = JacksonUtils.createEmptyJsonNode();
-            packet.replace("peer", JacksonUtils.transferToJsonNode(local));
-            
-            ArrayNode array = JacksonUtils.createEmptyArrayNode();
+
             
             if (switchDomain.isSendBeatOnly()) {
                 Loggers.RAFT.info("[SEND-BEAT-ONLY] {}", switchDomain.isSendBeatOnly());
             }
-            
+
+            ArrayNode array = JacksonUtils.createEmptyArrayNode();
             if (!switchDomain.isSendBeatOnly()) {
                 for (Datum datum : datums.values()) {
-                    
                     ObjectNode element = JacksonUtils.createEmptyJsonNode();
-                    
                     if (KeyBuilder.matchServiceMetaKey(datum.key)) {
                         element.put("key", KeyBuilder.briefServiceMetaKey(datum.key));
                     } else if (KeyBuilder.matchInstanceListKey(datum.key)) {
                         element.put("key", KeyBuilder.briefInstanceListkey(datum.key));
                     }
                     element.put("timestamp", datum.timestamp.get());
-                    
+
                     array.add(element);
                 }
             }
-            
+
+            // build data
+            ObjectNode packet = JacksonUtils.createEmptyJsonNode();
+            packet.replace("peer", JacksonUtils.transferToJsonNode(local));
             packet.replace("datums", array);
+
             // broadcast
             Map<String, String> params = new HashMap<String, String>(1);
             params.put("beat", JacksonUtils.toJson(packet));
-            
             String content = JacksonUtils.toJson(params);
-            
+
+            //数据压缩
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             GZIPOutputStream gzip = new GZIPOutputStream(out);
             gzip.write(content.getBytes(StandardCharsets.UTF_8));
@@ -684,13 +692,15 @@ public class RaftCore implements Closeable {
                 Loggers.RAFT.debug("raw beat data size: {}, size of compressed data: {}", content.length(),
                         compressedContent.length());
             }
-            
+
+            //不包含自己的所有peers
             for (final String server : peers.allServersWithoutMySelf()) {
                 try {
                     final String url = buildUrl(server, API_BEAT);
                     if (Loggers.RAFT.isDebugEnabled()) {
                         Loggers.RAFT.debug("send beat to server " + server);
                     }
+                    //向其它server发送心跳数据，当前为leader
                     HttpClient.asyncHttpPostLarge(url, null, compressedBytes, new Callback<String>() {
                         @Override
                         public void onReceive(RestResult<String> result) {
@@ -699,7 +709,7 @@ public class RaftCore implements Closeable {
                                 MetricsMonitor.getLeaderSendBeatFailedException().increment();
                                 return;
                             }
-                            
+                            //更新对应的peer
                             peers.update(JacksonUtils.toObj(result.getData(), RaftPeer.class));
                             if (Loggers.RAFT.isDebugEnabled()) {
                                 Loggers.RAFT.debug("receive beat response from: {}", url);
@@ -729,7 +739,7 @@ public class RaftCore implements Closeable {
     
     /**
      * Received beat from leader. // TODO split method to multiple smaller method.
-     *
+     * //接收来自leader的心跳
      * @param beat beat information from leader
      * @return self-peer information
      * @throws Exception any exception during handle
@@ -747,13 +757,13 @@ public class RaftCore implements Closeable {
         remote.heartbeatDueMs = peer.get("heartbeatDueMs").asLong();
         remote.leaderDueMs = peer.get("leaderDueMs").asLong();
         remote.voteFor = peer.get("voteFor").asText();
-        
+        //remote不是leader?
         if (remote.state != RaftPeer.State.LEADER) {
             Loggers.RAFT.info("[RAFT] invalid state from master, state: {}, remote peer: {}", remote.state,
                     JacksonUtils.toJson(remote));
             throw new IllegalArgumentException("invalid state from master, state: " + remote.state);
         }
-        
+        //remote的term值还是本地大？
         if (local.term.get() > remote.term.get()) {
             Loggers.RAFT
                     .info("[RAFT] out of date beat, beat-from-term: {}, beat-to-term: {}, remote peer: {}, and leaderDueMs: {}",
@@ -761,9 +771,9 @@ public class RaftCore implements Closeable {
             throw new IllegalArgumentException(
                     "out of date beat, beat-from-term: " + remote.term.get() + ", beat-to-term: " + local.term.get());
         }
-        
+
+        //让remote成为leader
         if (local.state != RaftPeer.State.FOLLOWER) {
-            
             Loggers.RAFT.info("[RAFT] make remote as leader, remote peer: {}", JacksonUtils.toJson(remote));
             // mk follower
             local.state = RaftPeer.State.FOLLOWER;

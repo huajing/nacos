@@ -241,6 +241,7 @@ public class RaftPeerSet extends MemberChangeListener implements Closeable {
         
         for (final RaftPeer peer : peers.values()) {
             Map<String, String> params = new HashMap<>(1);
+            //是leader了，看上面是for，但应该是只执行了一次
             if (!Objects.equals(peer, candidate) && peer.state == RaftPeer.State.LEADER) {
                 try {
                     String url = RaftCore.buildUrl(peer.ip, RaftCore.API_GET_PEER);

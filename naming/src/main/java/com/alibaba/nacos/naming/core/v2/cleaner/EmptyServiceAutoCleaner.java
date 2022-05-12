@@ -26,7 +26,7 @@ import java.util.stream.Stream;
 
 /**
  * Empty Service Auto Cleaner.
- *
+ * 空服务自动清除是个什么鬼？？
  * @author xiweng.yy
  */
 public class EmptyServiceAutoCleaner extends AbstractNamingCleaner {

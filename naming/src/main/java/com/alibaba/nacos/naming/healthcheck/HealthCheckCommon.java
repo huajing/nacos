@@ -88,6 +88,7 @@ public class HealthCheckCommon {
         Cluster cluster = task.getCluster();
         
         try {
+            //不大明白？？
             if (!ip.isHealthy() || !ip.isMockValid()) {
                 if (ip.getOkCount().incrementAndGet() >= switchDomain.getCheckTimes()) {
                     if (distroMapper.responsible(cluster, ip)) {

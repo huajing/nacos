@@ -157,12 +157,14 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
                 if (readyCount <= 0) {
                     continue;
                 }
-                
+
+                //nio tcp连接成功
                 Iterator<SelectionKey> iter = selector.selectedKeys().iterator();
                 while (iter.hasNext()) {
                     SelectionKey key = iter.next();
                     iter.remove();
-                    
+
+                    //交给别的线程来处理
                     GlobalExecutor.executeTcpSuperSense(new PostProcessor(key));
                 }
             } catch (Throwable e) {
@@ -181,27 +183,31 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
         
         @Override
         public void run() {
+            //key是nio tcp获取到的数据
             Beat beat = (Beat) key.attachment();
             SocketChannel channel = (SocketChannel) key.channel();
             try {
+                //beat不健康
                 if (!beat.isHealthy()) {
                     //invalid beat means this server is no longer responsible for the current service
                     key.cancel();
                     key.channel().close();
                     
                     beat.finishCheck();
-                    return;
+                    return;//不在处理
                 }
-                
+
+                //有效，可连接状态
                 if (key.isValid() && key.isConnectable()) {
-                    //connected
+                    //connected,完成链接？
                     channel.finishConnect();
+                    //核心逻辑在这里
                     beat.finishCheck(true, false, System.currentTimeMillis() - beat.getTask().getStartTime(),
                             "tcp:ok+");
                 }
-                
+                //有效，可读的状态
                 if (key.isValid() && key.isReadable()) {
-                    //disconnected
+                    //disconnected 为啥写个这
                     ByteBuffer buffer = ByteBuffer.allocate(128);
                     if (channel.read(buffer) == -1) {
                         key.cancel();
@@ -271,6 +277,7 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
             ip.setCheckRt(System.currentTimeMillis() - startTime);
             
             if (success) {
+                //核心逻辑：成功，响应给对方
                 healthCheckCommon.checkOK(ip, task, msg);
             } else {
                 if (now) {

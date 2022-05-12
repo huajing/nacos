@@ -122,7 +122,7 @@ public class MysqlHealthCheckProcessor implements HealthCheckProcessorV2 {
             this.instance = instance;
             this.metadata = metadata;
         }
-        
+        //看看这里是什么逻辑
         @Override
         public void run() {
             
@@ -130,7 +130,9 @@ public class MysqlHealthCheckProcessor implements HealthCheckProcessorV2 {
             ResultSet resultSet = null;
             
             try {
+                //集群名
                 String clusterName = instance.getCluster();
+                //拼接key，来吧
                 String key =
                         service.getGroupedServiceName() + ":" + clusterName + ":" + instance.getIp() + ":" + instance
                                 .getPort();
@@ -146,7 +148,8 @@ public class MysqlHealthCheckProcessor implements HealthCheckProcessorV2 {
                 
                 statement = connection.createStatement();
                 statement.setQueryTimeout(1);
-                
+
+                //执行cmd，是什么意思？？
                 resultSet = statement.executeQuery(config.getCmd());
                 int resultColumnIndex = 2;
                 

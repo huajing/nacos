@@ -126,6 +126,7 @@ public class ServiceManager implements RecordListener<Service> {
      */
     @PostConstruct
     public void init() {
+        //注册service的报告
         GlobalExecutor.scheduleServiceReporter(new ServiceReporter(), 60000, TimeUnit.MILLISECONDS);
 
         //启动阻塞队列，监听service变化
@@ -236,12 +237,12 @@ public class ServiceManager implements RecordListener<Service> {
     }
     
     private class UpdatedServiceProcessor implements Runnable {
-        
+        //我的service列表与别人的不一致，赶紧同步一下吧
         //get changed service from other server asynchronously
         @Override
         public void run() {
             ServiceKey serviceKey = null;
-            
+
             try {
                 //死循环一直监听service变化
                 while (true) {
@@ -255,7 +256,8 @@ public class ServiceManager implements RecordListener<Service> {
                     if (serviceKey == null) {
                         continue;
                     }
-                    //提交服务更新--》ServiceUpdater->run->updatedHealthStatus
+                    //当前server在别人给的service/status的调用中，发现了不一致，在这里要启动去更新
+                    //提交service服务更新--》ServiceUpdater->run->updatedHealthStatus
                     GlobalExecutor.submitServiceUpdate(new ServiceUpdater(serviceKey));
                 }
             } catch (Exception e) {
@@ -285,6 +287,7 @@ public class ServiceManager implements RecordListener<Service> {
         @Override
         public void run() {
             try {
+                //service状态与别人不一致了，赶紧去更新吧
                 //更新健康状态
                 updatedHealthStatus(namespaceId, serviceName, serverIP);
             } catch (Exception e) {
@@ -301,7 +304,7 @@ public class ServiceManager implements RecordListener<Service> {
     
     /**
      * Update health status of instance in service.
-     * 更新service中实例的健康状态
+     * 更新service中实例的健康状态，因为当前有服务与别人的不一致
      * @param namespaceId namespace
      * @param serviceName service name
      * @param serverIP    source server Ip
@@ -312,10 +315,10 @@ public class ServiceManager implements RecordListener<Service> {
         JsonNode serviceJson = JacksonUtils.toObj(msg.getData());
 
         //namespaceId+serviceName+serverIP有那些ip
+        //对方server中的ip列表
         ArrayNode ipList = (ArrayNode) serviceJson.get("ips");
         Map<String, String> ipsMap = new HashMap<>(ipList.size());
         for (int i = 0; i < ipList.size(); i++) {
-            
             String ip = ipList.get(i).asText();
             String[] strings = ip.split("_");
             ipsMap.put(strings[0], strings[1]);
@@ -328,7 +331,7 @@ public class ServiceManager implements RecordListener<Service> {
         }
         
         boolean changed = false;
-        //service所有的实例
+        //service所有的实例，以下核心逻辑是为了得到changed，主要就是比较有没有不一致的地方
         List<Instance> instances = service.allIPs();
         for (Instance instance : instances) {
             //参数serverIP对应机器上的有效状态
@@ -345,9 +348,11 @@ public class ServiceManager implements RecordListener<Service> {
 
         //只要有一个服务状态发生变化
         if (changed) {
+            //applicationContext.publishEvent，这里居然调用的是spring的事件通知，不知道为啥要这么做
+            //pushService = UdpPushService 实际就是以udp的方式发送到别的server
             pushService.serviceChanged(service);
 
-            //log不用看
+            //log不用看，整个if这么多代码，没啥了用
             if (Loggers.EVT_LOG.isDebugEnabled()) {
                 StringBuilder stringBuilder = new StringBuilder();
                 List<Instance> allIps = service.allIPs();
@@ -1084,7 +1089,12 @@ public class ServiceManager implements RecordListener<Service> {
             serviceName2Checksum.put(serviceName, checksum);
         }
     }
-    
+
+    /**
+     * 一个服务的报告器
+     * 如：order服务，goods服务，每一个服务有多台机器，
+     * 在一个namespace下是唯一的
+     */
     private class ServiceReporter implements Runnable {
         
         @Override
@@ -1097,7 +1107,17 @@ public class ServiceManager implements RecordListener<Service> {
                     //ignore
                     return;
                 }
-                
+
+                /**
+                 *  以下有3层for
+                 *  for(命名空间)｛
+                 *     for(服务列表){
+                 *        for(server列表){
+                 *          synchronizer.send(msg);
+                 *        }
+                 *     }
+                 *  ｝
+                 */
                 for (String namespaceId : allServiceNames.keySet()) {
                     //每个命名空间一个校验码
                     ServiceChecksum checksum = new ServiceChecksum(namespaceId);
@@ -1135,7 +1155,7 @@ public class ServiceManager implements RecordListener<Service> {
                         if (server.getAddress().equals(NetUtils.localServer())) {
                             continue;
                         }
-                        //发送信息给每一个Server
+                        //发送信息给每一个Server，ServiceStatusSynchronizer->send
                         synchronizer.send(server.getAddress(), msg);
                     }
                 }

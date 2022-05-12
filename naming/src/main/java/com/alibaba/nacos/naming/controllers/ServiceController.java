@@ -246,7 +246,7 @@ public class ServiceController {
     /**
      * Check service status whether latest.
      * 检查服务的状态是否是最新的
-     * 假设是从结点向leader调用？？
+     * 假设是从结点向leader调用？？应该是server之间的调用
      * @param request http request
      * @return 'ok' if service status if latest, otherwise 'fail' or exception
      * @throws Exception exception
@@ -306,14 +306,14 @@ public class ServiceController {
                         Loggers.SRV_LOG.debug("checksum of {} is not consistent, remote: {}, checksum: {}, local: {}",
                                 serviceName, serverIp, checksum, service.getChecksum());
                     }
-                    //不一致就加入到队列中启动推送任务
+                    //不一致就加入到阻塞队列中启动推送任务，ServiceManager->UpdatedServiceProcessor->run()
                     serviceManager.addUpdatedServiceToQueue(checksums.namespaceId, serviceName, serverIp, checksum);
                 }
             }
         } catch (Exception e) {
             Loggers.SRV_LOG.warn("[DOMAIN-STATUS] receive malformed data: " + statuses, e);
         }
-        
+        //执行成功返回 "ok" 就可以
         return "ok";
     }
     
